@@ -39,6 +39,23 @@
       margin-bottom: 28px;
     }
 
+    .header-right {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .io-controls {
+      display: flex;
+      gap: 6px;
+    }
+
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 0.8rem;
+    }
+
     .app-title {
       font-size: 1.5rem;
       font-weight: 700;
@@ -348,11 +365,18 @@
 
 <header>
   <div class="app-title">✈️ <span>Holiday</span> Planner</div>
-  <div class="nav-controls">
-    <button id="btn-prev" title="Previous month">&#8249;</button>
-    <span id="month-label"></span>
-    <button id="btn-next" title="Next month">&#8250;</button>
-    <select id="year-select"></select>
+  <div class="header-right">
+    <div class="io-controls">
+      <button class="btn btn-ghost btn-sm" id="btn-export" title="Export data to file">⬇ Export</button>
+      <button class="btn btn-ghost btn-sm" id="btn-import" title="Import data from file">⬆ Import</button>
+      <input type="file" id="file-input" accept=".hpd" style="display:none" />
+    </div>
+    <div class="nav-controls">
+      <button id="btn-prev" title="Previous month">&#8249;</button>
+      <span id="month-label"></span>
+      <button id="btn-next" title="Next month">&#8250;</button>
+      <select id="year-select"></select>
+    </div>
   </div>
 </header>
 
@@ -604,6 +628,63 @@
     t.textContent = text;
     return t;
   }
+
+  /* ── Import / Export ── */
+  const FILE_MAGIC = 'HPD1:'; // version prefix so we can evolve the format
+
+  function exportData() {
+    const payload = FILE_MAGIC + btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+    const blob = new Blob([payload], { type: 'text/plain' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = 'holiday-planner.hpd';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function importData(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const raw = e.target.result.trim();
+        if (!raw.startsWith(FILE_MAGIC)) throw new Error('Unrecognised file format.');
+        const decoded = JSON.parse(decodeURIComponent(escape(atob(raw.slice(FILE_MAGIC.length)))));
+        if (typeof decoded !== 'object' || decoded === null) throw new Error('Invalid data.');
+        const existing = Object.keys(data).length;
+        if (existing > 0) {
+          const merge = confirm(
+            `Import contains ${Object.keys(decoded).length} day(s).\n\n` +
+            `OK → Merge with existing data (imported days overwrite conflicts)\n` +
+            `Cancel → Replace all existing data`
+          );
+          if (merge) {
+            Object.assign(data, decoded);
+          } else {
+            data = decoded;
+          }
+        } else {
+          data = decoded;
+        }
+        save();
+        render();
+      } catch (err) {
+        alert('Import failed: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  document.getElementById('btn-export').addEventListener('click', exportData);
+
+  document.getElementById('btn-import').addEventListener('click', () => {
+    document.getElementById('file-input').value = '';
+    document.getElementById('file-input').click();
+  });
+
+  document.getElementById('file-input').addEventListener('change', e => {
+    if (e.target.files.length) importData(e.target.files[0]);
+  });
 
   render();
 </script>
