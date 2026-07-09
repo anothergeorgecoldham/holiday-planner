@@ -1,0 +1,12 @@
+{
+  "name": "holiday-planner",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Holiday planner with Azure Static Web Apps backend",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@azure/cosmos": "^4.2.0"
+  }
+}
