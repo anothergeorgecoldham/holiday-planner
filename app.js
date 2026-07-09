@@ -48,12 +48,10 @@ function renderAuthControls() {
       <span class="user-name">👤 ${currentUser.userDetails}</span>
       <a href="/.auth/logout" class="btn btn-ghost btn-sm">Logout</a>
     `;
-  } else if (tripId) {
+  } else {
     container.innerHTML = `
       <a href="/.auth/login/github" class="btn btn-ghost btn-sm">Login with GitHub</a>
     `;
-  } else {
-    container.innerHTML = '';
   }
 }
 
