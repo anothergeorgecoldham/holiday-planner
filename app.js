@@ -48,10 +48,6 @@ function renderAuthControls() {
       <span class="user-name">👤 ${currentUser.userDetails}</span>
       <a href="/.auth/logout" class="btn btn-ghost btn-sm">Logout</a>
     `;
-  } else {
-    container.innerHTML = `
-      <a href="/.auth/login/github" class="btn btn-ghost btn-sm">Login with GitHub</a>
-    `;
   }
 }
 
@@ -720,8 +716,8 @@ async function showDashboard() {
   const calendar = document.getElementById('calendar');
   const legend = document.getElementById('legend');
 
-  // Only show dashboard if logged in and no trip selected
-  if (!currentUser || tripId) {
+  // Only show dashboard if no trip selected
+  if (tripId) {
     dashboard.style.display = 'none';
     return;
   }
@@ -790,7 +786,7 @@ document.getElementById('btn-new-trip').addEventListener('click', async () => {
 (async function init() {
   currentUser = await getUser();
   renderAuthControls();
-  if (!tripId && currentUser) {
+  if (!tripId) {
     await showDashboard();
   } else {
     await loadData();
