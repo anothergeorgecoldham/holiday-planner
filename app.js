@@ -51,7 +51,6 @@ function renderAuthControls() {
   } else if (tripId) {
     container.innerHTML = `
       <a href="/.auth/login/github" class="btn btn-ghost btn-sm">Login with GitHub</a>
-      <a href="/.auth/login/aad" class="btn btn-ghost btn-sm">Login with Microsoft</a>
     `;
   } else {
     container.innerHTML = '';
@@ -606,6 +605,115 @@ document.getElementById('btn-import').addEventListener('click', () => {
 
 document.getElementById('file-input').addEventListener('change', e => {
   if (e.target.files.length) importData(e.target.files[0]);
+});
+
+/* ── Share modal ── */
+const shareOverlay = document.getElementById('share-overlay');
+const shareBtn = document.getElementById('btn-share');
+const shareLink = document.getElementById('share-link');
+const membersList = document.getElementById('members-list');
+const shareUsername = document.getElementById('share-username');
+
+// Show share button only when viewing a shared trip
+if (tripId) {
+  shareBtn.style.display = '';
+}
+
+shareBtn.addEventListener('click', async () => {
+  shareLink.value = window.location.href;
+  shareOverlay.classList.add('open');
+  await loadMembers();
+});
+
+document.getElementById('share-close').addEventListener('click', () => {
+  shareOverlay.classList.remove('open');
+});
+
+shareOverlay.addEventListener('click', (e) => {
+  if (e.target === shareOverlay) shareOverlay.classList.remove('open');
+});
+
+shareLink.addEventListener('click', () => {
+  shareLink.select();
+  navigator.clipboard.writeText(shareLink.value).then(() => {
+    showToast('Link copied!', 'info', 2000);
+  });
+});
+
+async function loadMembers() {
+  if (!tripId) return;
+  membersList.innerHTML = '<span style="color:var(--muted)">Loading...</span>';
+  try {
+    const res = await fetch(`/api/members?tripId=${encodeURIComponent(tripId)}`);
+    if (res.ok) {
+      const { members } = await res.json();
+      renderMembers(members);
+    } else {
+      membersList.innerHTML = '<span style="color:var(--accent2)">Could not load members</span>';
+    }
+  } catch {
+    membersList.innerHTML = '<span style="color:var(--accent2)">Failed to fetch members</span>';
+  }
+}
+
+function renderMembers(members) {
+  membersList.innerHTML = members.map(m =>
+    `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);">
+      <span>@${m}</span>
+      <button class="btn btn-ghost btn-sm remove-member-btn" data-username="${m}" style="font-size:0.7rem;padding:2px 8px;">✕</button>
+    </div>`
+  ).join('');
+
+  membersList.querySelectorAll('.remove-member-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const username = btn.dataset.username;
+      if (!confirm(`Remove @${username} from this trip?`)) return;
+      try {
+        const res = await fetch(`/api/members?tripId=${encodeURIComponent(tripId)}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username }),
+        });
+        if (res.ok) {
+          const { members } = await res.json();
+          renderMembers(members);
+          showToast(`@${username} removed`, 'info', 2000);
+        } else {
+          const err = await res.json();
+          showToast(err.error || 'Failed to remove', 'error');
+        }
+      } catch {
+        showToast('Failed to remove member', 'error');
+      }
+    });
+  });
+}
+
+document.getElementById('btn-add-member').addEventListener('click', async () => {
+  const username = shareUsername.value.trim().replace(/^@/, '');
+  if (!username) return;
+  try {
+    const res = await fetch(`/api/members?tripId=${encodeURIComponent(tripId)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username }),
+    });
+    if (res.ok) {
+      const { members } = await res.json();
+      renderMembers(members);
+      shareUsername.value = '';
+      showToast(`@${username} added!`, 'info', 2000);
+    } else {
+      const err = await res.json();
+      showToast(err.error || 'Failed to add', 'error');
+    }
+  } catch {
+    showToast('Failed to add member', 'error');
+  }
+});
+
+shareUsername.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('btn-add-member').click();
 });
 
 /* ── Init ── */

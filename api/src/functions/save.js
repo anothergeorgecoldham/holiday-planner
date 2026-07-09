@@ -16,7 +16,10 @@ app.http('save', {
       return { status: 401, jsonBody: { error: 'Authentication required' } };
     }
 
-    const userId = `${principal.identityProvider}|${principal.userId}`;
+    const username = principal.userDetails;
+    if (!username) {
+      return { status: 401, jsonBody: { error: 'Could not determine username' } };
+    }
 
     let body;
     try {
@@ -44,7 +47,7 @@ app.http('save', {
 
       if (existing) {
         // Check membership
-        if (existing.members && !existing.members.includes(userId)) {
+        if (existing.members && !existing.members.includes(username)) {
           return { status: 403, jsonBody: { error: 'Access denied' } };
         }
 
@@ -82,7 +85,7 @@ app.http('save', {
           type: 'trip',
           name: body.name || 'Untitled Trip',
           data: body.data,
-          members: [userId],
+          members: [username],
           createdAt: now,
           updatedAt: now,
         };

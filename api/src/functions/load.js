@@ -16,7 +16,10 @@ app.http('load', {
       return { status: 401, jsonBody: { error: 'Authentication required' } };
     }
 
-    const userId = `${principal.identityProvider}|${principal.userId}`;
+    const username = principal.userDetails;
+    if (!username) {
+      return { status: 401, jsonBody: { error: 'Could not determine username' } };
+    }
 
     try {
       const container = getContainer();
@@ -27,7 +30,7 @@ app.http('load', {
       }
 
       // Check membership
-      if (resource.members && !resource.members.includes(userId)) {
+      if (resource.members && !resource.members.includes(username)) {
         return { status: 403, jsonBody: { error: 'Access denied' } };
       }
 

@@ -14,6 +14,7 @@
     <div id="sync-status" class="sync-status"></div>
     <div id="auth-controls" class="auth-controls"></div>
     <div class="io-controls">
+      <button class="btn btn-ghost btn-sm" id="btn-share" title="Share trip" style="display:none">👥 Share</button>
       <button class="btn btn-ghost btn-sm" id="btn-export" title="Export data to file">⬇ Export</button>
       <button class="btn btn-ghost btn-sm" id="btn-import" title="Import data from file">⬆ Import</button>
       <input type="file" id="file-input" accept=".hpd" style="display:none" />
@@ -108,6 +109,34 @@
       <button class="btn btn-danger" id="btn-clear">Clear day</button>
       <button class="btn btn-ghost" id="btn-cancel">Cancel</button>
       <button class="btn btn-primary" id="btn-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Share Modal -->
+<div class="modal-overlay" id="share-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">👥 Share Trip</div>
+      <button class="modal-close" id="share-close">✕</button>
+    </div>
+
+    <div class="field-group">
+      <label>Trip link</label>
+      <input type="text" id="share-link" readonly style="cursor:pointer" />
+    </div>
+
+    <div class="field-group">
+      <label>Members</label>
+      <div id="members-list" style="font-size:0.85rem;color:var(--text);"></div>
+    </div>
+
+    <div class="field-group">
+      <label>Add member (GitHub username)</label>
+      <div style="display:flex;gap:8px;">
+        <input type="text" id="share-username" placeholder="e.g. octocat" style="flex:1" />
+        <button class="btn btn-primary btn-sm" id="btn-add-member">Add</button>
+      </div>
     </div>
   </div>
 </div>
