@@ -4,369 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Holiday Planner</title>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --bg: #0f1117;
-      --surface: #1a1d27;
-      --surface2: #22263a;
-      --border: #2e3348;
-      --accent: #5b8dee;
-      --accent2: #e85b8d;
-      --green: #3ecf8e;
-      --amber: #f5a623;
-      --purple: #9b6dff;
-      --text: #e2e6f0;
-      --muted: #6b7280;
-      --radius: 8px;
-    }
-
-    body {
-      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      padding: 24px 16px;
-    }
-
-    header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 12px;
-      margin-bottom: 28px;
-    }
-
-    .header-right {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 12px;
-    }
-
-    .io-controls {
-      display: flex;
-      gap: 6px;
-    }
-
-    .btn-sm {
-      padding: 6px 12px;
-      font-size: 0.8rem;
-    }
-
-    .app-title {
-      font-size: 1.5rem;
-      font-weight: 700;
-      letter-spacing: -0.5px;
-      color: var(--accent);
-    }
-
-    .app-title span { color: var(--text); }
-
-    .nav-controls {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .nav-controls button {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      color: var(--text);
-      width: 36px;
-      height: 36px;
-      border-radius: var(--radius);
-      cursor: pointer;
-      font-size: 1rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: background 0.15s;
-    }
-
-    .nav-controls button:hover { background: var(--accent); border-color: var(--accent); }
-
-    #month-label {
-      font-size: 1.1rem;
-      font-weight: 600;
-      min-width: 160px;
-      text-align: center;
-    }
-
-    select {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 6px 10px;
-      border-radius: var(--radius);
-      font-size: 0.9rem;
-      cursor: pointer;
-    }
-
-    /* Legend */
-    .legend {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      margin-bottom: 20px;
-      font-size: 0.78rem;
-      color: var(--muted);
-    }
-
-    .legend-item { display: flex; align-items: center; gap: 5px; }
-    .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-
-    /* Calendar grid */
-    .calendar {
-      display: grid;
-      grid-template-columns: repeat(7, 1fr);
-      gap: 4px;
-    }
-
-    .day-header {
-      text-align: center;
-      font-size: 0.72rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--muted);
-      padding: 8px 0;
-    }
-
-    .day-cell {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      min-height: 120px;
-      padding: 6px;
-      cursor: pointer;
-      transition: border-color 0.15s, background 0.15s;
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-      user-select: none;
-    }
-
-    .day-cell.empty { background: transparent; border-color: transparent; cursor: default; }
-
-    .day-cell:not(.empty):hover { border-color: var(--accent); }
-
-    .day-cell.today { border-color: var(--accent); }
-
-    .day-cell.fly-out { border-left: 3px solid var(--accent2); }
-    .day-cell.fly-in  { border-left: 3px solid var(--green); }
-    .day-cell.fly-out.fly-in { border-left: 3px solid var(--amber); }
-
-    .day-num {
-      font-size: 0.8rem;
-      font-weight: 700;
-      color: var(--muted);
-      margin-bottom: 2px;
-    }
-
-    .day-cell.today .day-num {
-      background: var(--accent);
-      color: #fff;
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.75rem;
-    }
-
-    .tag {
-      font-size: 0.68rem;
-      padding: 1px 5px;
-      border-radius: 4px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 100%;
-      display: block;
-    }
-
-    .tag-flight-out { background: rgba(232,91,141,0.2); color: var(--accent2); }
-    .tag-flight-in  { background: rgba(62,207,142,0.2); color: var(--green); }
-    .tag-accom      { background: rgba(91,141,238,0.2); color: var(--accent); }
-    .tag-transit    { background: rgba(245,166,35,0.2); color: var(--amber); }
-    .tag-activity   { background: rgba(155,109,255,0.2); color: var(--purple); }
-    .tag-ref        { background: rgba(107,114,128,0.15); color: var(--muted); font-style: italic; }
-
-    /* Modal */
-    .modal-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.65);
-      z-index: 100;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-    }
-
-    .modal-overlay.open { display: flex; }
-
-    .modal {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      width: 100%;
-      max-width: 480px;
-      padding: 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      box-shadow: 0 24px 64px rgba(0,0,0,0.5);
-      animation: slideUp 0.18s ease;
-    }
-
-    @keyframes slideUp {
-      from { transform: translateY(16px); opacity: 0; }
-      to   { transform: translateY(0);    opacity: 1; }
-    }
-
-    .modal-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .modal-title {
-      font-size: 1rem;
-      font-weight: 700;
-      color: var(--accent);
-    }
-
-    .modal-close {
-      background: none;
-      border: none;
-      color: var(--muted);
-      font-size: 1.2rem;
-      cursor: pointer;
-      line-height: 1;
-      padding: 2px 6px;
-      border-radius: 4px;
-    }
-
-    .modal-close:hover { color: var(--text); background: var(--surface2); }
-
-    .field-group {
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-    }
-
-    .field-group label {
-      font-size: 0.76rem;
-      font-weight: 600;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .field-group input,
-    .field-group textarea {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 8px 10px;
-      border-radius: var(--radius);
-      font-size: 0.875rem;
-      font-family: inherit;
-      transition: border-color 0.15s;
-      width: 100%;
-    }
-
-    .field-group textarea { resize: vertical; min-height: 60px; }
-
-    .field-group input:focus,
-    .field-group textarea:focus {
-      outline: none;
-      border-color: var(--accent);
-    }
-
-    .checkbox-row {
-      display: flex;
-      gap: 16px;
-    }
-
-    .checkbox-label {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 0.85rem;
-      cursor: pointer;
-      user-select: none;
-    }
-
-    .checkbox-label input[type="checkbox"] {
-      width: 16px;
-      height: 16px;
-      accent-color: var(--accent);
-      cursor: pointer;
-    }
-
-    .modal-actions {
-      display: flex;
-      gap: 8px;
-      justify-content: flex-end;
-    }
-
-    .btn {
-      padding: 8px 18px;
-      border-radius: var(--radius);
-      border: 1px solid var(--border);
-      font-size: 0.875rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.15s;
-    }
-
-    .btn-primary {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #fff;
-    }
-
-    .btn-primary:hover { background: #4a7de0; }
-
-    .btn-ghost {
-      background: transparent;
-      color: var(--muted);
-    }
-
-    .btn-ghost:hover { background: var(--surface2); color: var(--text); }
-
-    .btn-danger {
-      background: transparent;
-      border-color: var(--accent2);
-      color: var(--accent2);
-      margin-right: auto;
-    }
-
-    .btn-danger:hover { background: rgba(232,91,141,0.1); }
-
-    @media (max-width: 640px) {
-      .day-cell { min-height: 80px; padding: 4px; }
-      .tag { font-size: 0.6rem; }
-      .day-num { font-size: 0.72rem; }
-    }
-  </style>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
 
 <header>
   <div class="app-title">✈️ <span>Holiday</span> Planner</div>
   <div class="header-right">
+    <div id="sync-status" class="sync-status"></div>
+    <div id="auth-controls" class="auth-controls"></div>
     <div class="io-controls">
+      <button class="btn btn-ghost btn-sm" id="btn-share" title="Share trip" style="display:none">👥 Share</button>
       <button class="btn btn-ghost btn-sm" id="btn-export" title="Export data to file">⬇ Export</button>
       <button class="btn btn-ghost btn-sm" id="btn-import" title="Import data from file">⬆ Import</button>
       <input type="file" id="file-input" accept=".hpd" style="display:none" />
@@ -380,13 +28,22 @@
   </div>
 </header>
 
-<div class="legend">
+<div class="legend" id="legend">
   <span class="legend-item"><span class="dot" style="background:var(--accent2)"></span> Fly out</span>
   <span class="legend-item"><span class="dot" style="background:var(--green)"></span> Fly in</span>
   <span class="legend-item"><span class="dot" style="background:var(--accent)"></span> Accommodation</span>
   <span class="legend-item"><span class="dot" style="background:var(--amber)"></span> Internal transit</span>
   <span class="legend-item"><span class="dot" style="background:var(--purple)"></span> Activity</span>
   <span class="legend-item"><span class="dot" style="background:var(--muted)"></span> Booking ref</span>
+</div>
+
+<!-- Trips Dashboard (shown when logged in, no trip selected) -->
+<div id="trips-dashboard" style="display:none;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+    <h2 style="font-size:1.1rem;font-weight:600;color:var(--text);">My Trips</h2>
+    <button class="btn btn-primary btn-sm" id="btn-new-trip">+ New Trip</button>
+  </div>
+  <div id="trips-list" style="display:grid;gap:10px;"></div>
 </div>
 
 <div class="calendar" id="calendar"></div>
@@ -399,40 +56,62 @@
       <button class="modal-close" id="modal-close">✕</button>
     </div>
 
-    <div class="checkbox-row">
-      <label class="checkbox-label">
-        <input type="checkbox" id="field-fly-out" />
-        <span style="color:var(--accent2)">✈️ Fly out</span>
-      </label>
-      <label class="checkbox-label">
-        <input type="checkbox" id="field-fly-in" />
-        <span style="color:var(--green)">🛬 Fly in</span>
-      </label>
-    </div>
+    <div class="modal-fields-container">
+      <div class="modal-fields" id="modal-fields">
+        <div class="modal-field-wrapper" data-field="flights">
+          <span class="drag-handle">⠿</span>
+          <div class="checkbox-row">
+            <label class="checkbox-label">
+              <input type="checkbox" id="field-fly-out" />
+              <span style="color:var(--accent2)">✈️ Fly out</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="field-fly-in" />
+              <span style="color:var(--green)">🛬 Fly in</span>
+            </label>
+          </div>
+        </div>
 
-    <div class="field-group">
-      <label>🏨 Accommodation</label>
-      <input type="text" id="field-accom" placeholder="Hotel / Airbnb / hostel name..." />
-    </div>
+        <div class="modal-field-wrapper" data-field="accom">
+          <span class="drag-handle">⠿</span>
+          <div class="field-group">
+            <label>🏨 Accommodation <span class="field-hint">(one per line)</span></label>
+            <textarea id="field-accom" placeholder="Hotel / Airbnb / hostel name...&#10;e.g. Checking out: Hotel A&#10;Checking in: Hotel B" rows="2"></textarea>
+          </div>
+        </div>
 
-    <div class="field-group">
-      <label>🚂 Internal transit</label>
-      <input type="text" id="field-transit" placeholder="Train, bus, ferry, hire car..." />
-    </div>
+        <div class="modal-field-wrapper" data-field="transit">
+          <span class="drag-handle">⠿</span>
+          <div class="field-group">
+            <label>🚂 Internal transit <span class="field-hint">(one per line)</span></label>
+            <textarea id="field-transit" placeholder="Train, bus, ferry, hire car...&#10;e.g. Bus: Sapa → Hanoi&#10;Flight: Hanoi → HCMC" rows="2"></textarea>
+          </div>
+        </div>
 
-    <div class="field-group">
-      <label>🎯 Activities</label>
-      <textarea id="field-activity" placeholder="Tours, excursions, plans..."></textarea>
-    </div>
+        <div class="modal-field-wrapper" data-field="activity">
+          <span class="drag-handle">⠿</span>
+          <div class="field-group">
+            <label>🎯 Activities <span class="field-hint">(one per line)</span></label>
+            <textarea id="field-activity" placeholder="Tours, excursions, plans...&#10;e.g. Morning: Temple visit&#10;Afternoon: Cooking class"></textarea>
+          </div>
+        </div>
 
-    <div class="field-group">
-      <label>🔖 Booking reference</label>
-      <input type="text" id="field-ref" placeholder="e.g. BA12345 / AB-678-CD..." />
-    </div>
+        <div class="modal-field-wrapper" data-field="ref">
+          <span class="drag-handle">⠿</span>
+          <div class="field-group">
+            <label>🔖 Booking references <span class="field-hint">(one per line)</span></label>
+            <textarea id="field-ref" placeholder="e.g. BA12345&#10;Booking.com: 9876543" rows="2"></textarea>
+          </div>
+        </div>
 
-    <div class="field-group">
-      <label>📝 Notes</label>
-      <textarea id="field-notes" placeholder="Anything else..."></textarea>
+        <div class="modal-field-wrapper" data-field="notes">
+          <span class="drag-handle">⠿</span>
+          <div class="field-group">
+            <label>📝 Notes</label>
+            <textarea id="field-notes" placeholder="Anything else..."></textarea>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="modal-actions">
@@ -443,250 +122,34 @@
   </div>
 </div>
 
-<script>
-  const MONTHS = ['January','February','March','April','May','June',
-                  'July','August','September','October','November','December'];
-  const DAYS   = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+<!-- Share Modal -->
+<div class="modal-overlay" id="share-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">👥 Share Trip</div>
+      <button class="modal-close" id="share-close">✕</button>
+    </div>
 
-  const storageKey = 'holiday-planner-v1';
+    <div class="field-group">
+      <label>Trip link</label>
+      <input type="text" id="share-link" readonly style="cursor:pointer" />
+    </div>
 
-  let data = {};
-  try { data = JSON.parse(localStorage.getItem(storageKey)) || {}; } catch(e) {}
+    <div class="field-group">
+      <label>Members</label>
+      <div id="members-list" style="font-size:0.85rem;color:var(--text);"></div>
+    </div>
 
-  const save = () => localStorage.setItem(storageKey, JSON.stringify(data));
+    <div class="field-group">
+      <label>Add member (GitHub username)</label>
+      <div style="display:flex;gap:8px;">
+        <input type="text" id="share-username" placeholder="e.g. octocat" style="flex:1" />
+        <button class="btn btn-primary btn-sm" id="btn-add-member">Add</button>
+      </div>
+    </div>
+  </div>
+</div>
 
-  const today = new Date();
-  let viewYear  = today.getFullYear();
-  let viewMonth = today.getMonth(); // 0-indexed
-
-  /* ── Year selector ── */
-  const yearSel = document.getElementById('year-select');
-  for (let y = today.getFullYear() - 2; y <= today.getFullYear() + 5; y++) {
-    const opt = document.createElement('option');
-    opt.value = y;
-    opt.textContent = y;
-    if (y === viewYear) opt.selected = true;
-    yearSel.appendChild(opt);
-  }
-  yearSel.addEventListener('change', () => { viewYear = +yearSel.value; render(); });
-
-  document.getElementById('btn-prev').addEventListener('click', () => {
-    viewMonth--;
-    if (viewMonth < 0) { viewMonth = 11; viewYear--; }
-    syncYearSelect();
-    render();
-  });
-
-  document.getElementById('btn-next').addEventListener('click', () => {
-    viewMonth++;
-    if (viewMonth > 11) { viewMonth = 0; viewYear++; }
-    syncYearSelect();
-    render();
-  });
-
-  function syncYearSelect() {
-    yearSel.value = viewYear;
-  }
-
-  /* ── Modal state ── */
-  let activeKey = null;
-
-  const overlay  = document.getElementById('modal-overlay');
-  const fFlyOut  = document.getElementById('field-fly-out');
-  const fFlyIn   = document.getElementById('field-fly-in');
-  const fAccom   = document.getElementById('field-accom');
-  const fTransit = document.getElementById('field-transit');
-  const fActivity= document.getElementById('field-activity');
-  const fRef     = document.getElementById('field-ref');
-  const fNotes   = document.getElementById('field-notes');
-
-  function openModal(dateKey, label) {
-    activeKey = dateKey;
-    document.getElementById('modal-date-title').textContent = label;
-    const d = data[dateKey] || {};
-    fFlyOut.checked    = !!d.flyOut;
-    fFlyIn.checked     = !!d.flyIn;
-    fAccom.value       = d.accom    || '';
-    fTransit.value     = d.transit  || '';
-    fActivity.value    = d.activity || '';
-    fRef.value         = d.ref      || '';
-    fNotes.value       = d.notes    || '';
-    overlay.classList.add('open');
-    fAccom.focus();
-  }
-
-  function closeModal() {
-    overlay.classList.remove('open');
-    activeKey = null;
-  }
-
-  document.getElementById('modal-close').addEventListener('click', closeModal);
-  document.getElementById('btn-cancel').addEventListener('click', closeModal);
-  overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
-
-  document.getElementById('btn-save').addEventListener('click', () => {
-    if (!activeKey) return;
-    const entry = {
-      flyOut:   fFlyOut.checked,
-      flyIn:    fFlyIn.checked,
-      accom:    fAccom.value.trim(),
-      transit:  fTransit.value.trim(),
-      activity: fActivity.value.trim(),
-      ref:      fRef.value.trim(),
-      notes:    fNotes.value.trim(),
-    };
-    // Only store if something is set
-    const hasContent = entry.flyOut || entry.flyIn ||
-      entry.accom || entry.transit || entry.activity || entry.ref || entry.notes;
-    if (hasContent) {
-      data[activeKey] = entry;
-    } else {
-      delete data[activeKey];
-    }
-    save();
-    closeModal();
-    render();
-  });
-
-  document.getElementById('btn-clear').addEventListener('click', () => {
-    if (!activeKey) return;
-    delete data[activeKey];
-    save();
-    closeModal();
-    render();
-  });
-
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') closeModal();
-  });
-
-  /* ── Render ── */
-  function render() {
-    document.getElementById('month-label').textContent =
-      `${MONTHS[viewMonth]} ${viewYear}`;
-
-    const cal = document.getElementById('calendar');
-    cal.innerHTML = '';
-
-    // Day headers (Mon-first)
-    DAYS.forEach(d => {
-      const h = document.createElement('div');
-      h.className = 'day-header';
-      h.textContent = d;
-      cal.appendChild(h);
-    });
-
-    // First day of month (Mon=0)
-    const firstDay = new Date(viewYear, viewMonth, 1).getDay(); // 0=Sun
-    const startOffset = (firstDay + 6) % 7; // shift to Mon-start
-
-    const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-
-    // Empty cells before 1st
-    for (let i = 0; i < startOffset; i++) {
-      const empty = document.createElement('div');
-      empty.className = 'day-cell empty';
-      cal.appendChild(empty);
-    }
-
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dateKey = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-      const entry = data[dateKey] || {};
-
-      const cell = document.createElement('div');
-      cell.className = 'day-cell';
-
-      const isToday = (d === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear());
-      if (isToday) cell.classList.add('today');
-      if (entry.flyOut) cell.classList.add('fly-out');
-      if (entry.flyIn)  cell.classList.add('fly-in');
-
-      // Day number
-      const num = document.createElement('div');
-      num.className = 'day-num';
-      num.textContent = d;
-      cell.appendChild(num);
-
-      // Tags
-      if (entry.flyOut) cell.appendChild(tag('✈️ Fly out', 'tag-flight-out'));
-      if (entry.flyIn)  cell.appendChild(tag('🛬 Fly in',  'tag-flight-in'));
-      if (entry.accom)  cell.appendChild(tag('🏨 ' + entry.accom, 'tag-accom'));
-      if (entry.transit)cell.appendChild(tag('🚂 ' + entry.transit, 'tag-transit'));
-      if (entry.activity)cell.appendChild(tag('🎯 ' + entry.activity, 'tag-activity'));
-      if (entry.ref)    cell.appendChild(tag('🔖 ' + entry.ref, 'tag-ref'));
-
-      const label = `${DAYS[(startOffset + d - 1) % 7]} ${d} ${MONTHS[viewMonth]} ${viewYear}`;
-      cell.addEventListener('click', () => openModal(dateKey, label));
-
-      cal.appendChild(cell);
-    }
-  }
-
-  function tag(text, cls) {
-    const t = document.createElement('span');
-    t.className = `tag ${cls}`;
-    t.textContent = text;
-    return t;
-  }
-
-  /* ── Import / Export ── */
-  const FILE_MAGIC = 'HPD1:'; // version prefix so we can evolve the format
-
-  function exportData() {
-    const payload = FILE_MAGIC + btoa(unescape(encodeURIComponent(JSON.stringify(data))));
-    const blob = new Blob([payload], { type: 'text/plain' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
-    a.download = 'holiday-planner.hpd';
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function importData(file) {
-    const reader = new FileReader();
-    reader.onload = e => {
-      try {
-        const raw = e.target.result.trim();
-        if (!raw.startsWith(FILE_MAGIC)) throw new Error('Unrecognised file format.');
-        const decoded = JSON.parse(decodeURIComponent(escape(atob(raw.slice(FILE_MAGIC.length)))));
-        if (typeof decoded !== 'object' || decoded === null) throw new Error('Invalid data.');
-        const existing = Object.keys(data).length;
-        if (existing > 0) {
-          const merge = confirm(
-            `Import contains ${Object.keys(decoded).length} day(s).\n\n` +
-            `OK → Merge with existing data (imported days overwrite conflicts)\n` +
-            `Cancel → Replace all existing data`
-          );
-          if (merge) {
-            Object.assign(data, decoded);
-          } else {
-            data = decoded;
-          }
-        } else {
-          data = decoded;
-        }
-        save();
-        render();
-      } catch (err) {
-        alert('Import failed: ' + err.message);
-      }
-    };
-    reader.readAsText(file);
-  }
-
-  document.getElementById('btn-export').addEventListener('click', exportData);
-
-  document.getElementById('btn-import').addEventListener('click', () => {
-    document.getElementById('file-input').value = '';
-    document.getElementById('file-input').click();
-  });
-
-  document.getElementById('file-input').addEventListener('change', e => {
-    if (e.target.files.length) importData(e.target.files[0]);
-  });
-
-  render();
-</script>
+<script src="app.js"></script>
 </body>
 </html>
