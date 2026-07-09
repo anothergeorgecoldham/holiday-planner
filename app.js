@@ -714,9 +714,85 @@ shareUsername.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') document.getElementById('btn-add-member').click();
 });
 
+/* ── Trips Dashboard ── */
+async function showDashboard() {
+  const dashboard = document.getElementById('trips-dashboard');
+  const calendar = document.getElementById('calendar');
+  const legend = document.getElementById('legend');
+
+  // Only show dashboard if logged in and no trip selected
+  if (!currentUser || tripId) {
+    dashboard.style.display = 'none';
+    return;
+  }
+
+  dashboard.style.display = '';
+  calendar.style.display = 'none';
+  legend.style.display = 'none';
+
+  const tripsList = document.getElementById('trips-list');
+  tripsList.innerHTML = '<span style="color:var(--muted);font-size:0.85rem;">Loading trips...</span>';
+
+  try {
+    const res = await fetch('/api/trips');
+    if (res.ok) {
+      const { trips } = await res.json();
+      if (trips.length === 0) {
+        tripsList.innerHTML = '<span style="color:var(--muted);font-size:0.85rem;">No trips yet. Create one to get started!</span>';
+      } else {
+        tripsList.innerHTML = trips.map(t => `
+          <div class="trip-card" data-trip-id="${t.tripId}">
+            <div>
+              <div class="trip-name">${t.name}</div>
+              <div class="trip-meta">Updated ${new Date(t.updatedAt).toLocaleDateString()}</div>
+            </div>
+            <span style="color:var(--muted);font-size:1.2rem;">›</span>
+          </div>
+        `).join('');
+
+        tripsList.querySelectorAll('.trip-card').forEach(card => {
+          card.addEventListener('click', () => {
+            window.location.href = `?trip=${card.dataset.tripId}`;
+          });
+        });
+      }
+    } else {
+      tripsList.innerHTML = '<span style="color:var(--accent2);font-size:0.85rem;">Failed to load trips</span>';
+    }
+  } catch {
+    tripsList.innerHTML = '<span style="color:var(--accent2);font-size:0.85rem;">Could not connect to server</span>';
+  }
+}
+
+document.getElementById('btn-new-trip').addEventListener('click', async () => {
+  const name = prompt('Trip name (e.g. "Vietnam 2026"):');
+  if (!name || !name.trim()) return;
+
+  try {
+    const res = await fetch('/api/trips', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name.trim() }),
+    });
+    if (res.ok) {
+      const { tripId: newTripId } = await res.json();
+      window.location.href = `?trip=${newTripId}`;
+    } else {
+      const err = await res.json();
+      showToast(err.error || 'Failed to create trip', 'error');
+    }
+  } catch {
+    showToast('Failed to create trip', 'error');
+  }
+});
+
 /* ── Init ── */
 (async function init() {
   currentUser = await getUser();
   renderAuthControls();
-  await loadData();
+  if (!tripId && currentUser) {
+    await showDashboard();
+  } else {
+    await loadData();
+  }
 })();

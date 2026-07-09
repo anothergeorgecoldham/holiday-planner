@@ -442,6 +442,32 @@ select {
 .toast.toast-error { border-color: var(--accent2); }
 .toast.toast-warning { border-color: var(--amber); }
 
+/* Trips dashboard */
+.trip-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.trip-card:hover { border-color: var(--accent); }
+
+.trip-card .trip-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.trip-card .trip-meta {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
 /* Day popover */
 .day-popover {
   position: fixed;

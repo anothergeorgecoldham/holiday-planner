@@ -28,13 +28,22 @@
   </div>
 </header>
 
-<div class="legend">
+<div class="legend" id="legend">
   <span class="legend-item"><span class="dot" style="background:var(--accent2)"></span> Fly out</span>
   <span class="legend-item"><span class="dot" style="background:var(--green)"></span> Fly in</span>
   <span class="legend-item"><span class="dot" style="background:var(--accent)"></span> Accommodation</span>
   <span class="legend-item"><span class="dot" style="background:var(--amber)"></span> Internal transit</span>
   <span class="legend-item"><span class="dot" style="background:var(--purple)"></span> Activity</span>
   <span class="legend-item"><span class="dot" style="background:var(--muted)"></span> Booking ref</span>
+</div>
+
+<!-- Trips Dashboard (shown when logged in, no trip selected) -->
+<div id="trips-dashboard" style="display:none;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+    <h2 style="font-size:1.1rem;font-weight:600;color:var(--text);">My Trips</h2>
+    <button class="btn btn-primary btn-sm" id="btn-new-trip">+ New Trip</button>
+  </div>
+  <div id="trips-list" style="display:grid;gap:10px;"></div>
 </div>
 
 <div class="calendar" id="calendar"></div>
