@@ -1,5 +1,11 @@
 const { app } = require('@azure/functions');
-const { getContainer, getClientPrincipal } = require('../shared');
+const {
+  ensurePrincipalMembership,
+  getContainer,
+  getClientPrincipal,
+  getUsername,
+  isTripMember,
+} = require('../shared');
 
 app.http('save', {
   methods: ['PUT'],
@@ -16,7 +22,7 @@ app.http('save', {
       return { status: 401, jsonBody: { error: 'Authentication required' } };
     }
 
-    const username = principal.userDetails;
+    const username = getUsername(principal);
     if (!username) {
       return { status: 401, jsonBody: { error: 'Could not determine username' } };
     }
@@ -47,7 +53,7 @@ app.http('save', {
 
       if (existing) {
         // Check membership
-        if (existing.members && !existing.members.includes(username)) {
+        if (!isTripMember(existing, principal)) {
           return { status: 403, jsonBody: { error: 'Access denied' } };
         }
 
@@ -68,6 +74,7 @@ app.http('save', {
           data: body.data,
           updatedAt: now,
         };
+        ensurePrincipalMembership(updated, principal);
 
         const { resource } = await container.item(tripId, tripId).replace(updated, {
           accessCondition: { type: 'IfMatch', condition: existing._etag },
@@ -86,9 +93,11 @@ app.http('save', {
           name: body.name || 'Untitled Trip',
           data: body.data,
           members: [username],
+          memberKeys: [],
           createdAt: now,
           updatedAt: now,
         };
+        ensurePrincipalMembership(newTrip, principal);
 
         const { resource } = await container.items.create(newTrip);
 

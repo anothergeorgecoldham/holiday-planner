@@ -26,4 +26,55 @@ function getClientPrincipal(req) {
   }
 }
 
-module.exports = { getContainer, getClientPrincipal };
+function normalizeMember(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function getUsername(principal) {
+  return normalizeMember(principal?.userDetails);
+}
+
+function getPrincipalMemberKey(principal) {
+  if (!principal?.identityProvider || !principal?.userId) return '';
+  return normalizeMember(`${principal.identityProvider}|${principal.userId}`);
+}
+
+function getPrincipalMemberKeys(principal) {
+  return [...new Set([getUsername(principal), getPrincipalMemberKey(principal)].filter(Boolean))];
+}
+
+function normalizedList(values) {
+  return Array.isArray(values) ? values.map(normalizeMember).filter(Boolean) : [];
+}
+
+function isTripMember(trip, principal) {
+  const principalKeys = getPrincipalMemberKeys(principal);
+  const members = normalizedList(trip?.members);
+  const memberKeys = normalizedList(trip?.memberKeys);
+  return principalKeys.some(key => members.includes(key) || memberKeys.includes(key));
+}
+
+function ensurePrincipalMembership(trip, principal) {
+  const username = getUsername(principal);
+  const memberKey = getPrincipalMemberKey(principal);
+
+  trip.members = normalizedList(trip.members);
+  trip.memberKeys = normalizedList(trip.memberKeys);
+
+  if (username && !trip.members.includes(username)) {
+    trip.members.push(username);
+  }
+  if (memberKey && !trip.memberKeys.includes(memberKey)) {
+    trip.memberKeys.push(memberKey);
+  }
+}
+
+module.exports = {
+  ensurePrincipalMembership,
+  getClientPrincipal,
+  getContainer,
+  getPrincipalMemberKey,
+  getUsername,
+  isTripMember,
+  normalizeMember,
+};

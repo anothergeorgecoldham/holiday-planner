@@ -1,5 +1,5 @@
 const { app } = require('@azure/functions');
-const { getContainer, getClientPrincipal } = require('../shared');
+const { getContainer, getClientPrincipal, getUsername, isTripMember } = require('../shared');
 
 app.http('load', {
   methods: ['GET'],
@@ -16,7 +16,7 @@ app.http('load', {
       return { status: 401, jsonBody: { error: 'Authentication required' } };
     }
 
-    const username = principal.userDetails;
+    const username = getUsername(principal);
     if (!username) {
       return { status: 401, jsonBody: { error: 'Could not determine username' } };
     }
@@ -30,7 +30,7 @@ app.http('load', {
       }
 
       // Check membership
-      if (resource.members && !resource.members.includes(username)) {
+      if (!isTripMember(resource, principal)) {
         return { status: 403, jsonBody: { error: 'Access denied' } };
       }
 

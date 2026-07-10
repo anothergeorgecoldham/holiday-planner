@@ -1,5 +1,11 @@
 const { app } = require('@azure/functions');
-const { getContainer, getClientPrincipal } = require('../shared');
+const {
+  getContainer,
+  getClientPrincipal,
+  getUsername,
+  isTripMember,
+  normalizeMember,
+} = require('../shared');
 
 app.http('members', {
   methods: ['GET', 'POST', 'DELETE'],
@@ -16,7 +22,7 @@ app.http('members', {
       return { status: 401, jsonBody: { error: 'Authentication required' } };
     }
 
-    const username = principal.userDetails;
+    const username = getUsername(principal);
     if (!username) {
       return { status: 401, jsonBody: { error: 'Could not determine username' } };
     }
@@ -30,7 +36,7 @@ app.http('members', {
       }
 
       // Only existing members can manage membership
-      if (!trip.members || !trip.members.includes(username)) {
+      if (!isTripMember(trip, principal)) {
         return { status: 403, jsonBody: { error: 'Access denied' } };
       }
 
@@ -54,7 +60,8 @@ app.http('members', {
         return { status: 400, jsonBody: { error: 'username is required' } };
       }
 
-      const cleanUsername = targetUsername.trim().toLowerCase().replace(/^@/, '');
+      const cleanUsername = normalizeMember(targetUsername.replace(/^@/, ''));
+      trip.members = Array.isArray(trip.members) ? trip.members.map(normalizeMember).filter(Boolean) : [];
 
       if (req.method === 'POST') {
         if (trip.members.includes(cleanUsername)) {
