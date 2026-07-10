@@ -13,6 +13,10 @@
       "allowedRoles": ["anonymous"]
     },
     {
+      "route": "/login.html",
+      "allowedRoles": ["anonymous"]
+    },
+    {
       "route": "/*",
       "allowedRoles": ["authenticated"]
     }
@@ -20,7 +24,7 @@
   "responseOverrides": {
     "401": {
       "statusCode": 302,
-      "redirect": "/.auth/login/github"
+      "redirect": "/login.html"
     }
   },
   "navigationFallback": {

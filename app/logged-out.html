@@ -6,14 +6,15 @@
   <title>Logged out - Holiday Planner</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body>
-  <main class="logout-page">
-    <div class="logout-card">
-      <div class="app-title">✈️ <span>Holiday</span> Planner</div>
-      <h1>You’re logged out</h1>
-      <p>Use GitHub to sign in again when you’re ready to plan.</p>
-      <a class="btn btn-primary" href="/.auth/login/github">Login with GitHub</a>
-    </div>
+<body class="auth-body">
+  <main class="auth-page auth-page-compact">
+    <section class="auth-card" aria-labelledby="logout-title">
+      <div class="auth-brand">✈️ <span>Holiday</span> Planner</div>
+      <p class="auth-kicker">Signed out</p>
+      <h1 id="logout-title">You’re logged out.</h1>
+      <p class="auth-lede">Your shared trips are safe. Sign in again when you’re ready to keep planning.</p>
+      <a class="btn btn-primary auth-primary" href="/.auth/login/github">Login with GitHub</a>
+    </section>
   </main>
 </body>
 </html>
