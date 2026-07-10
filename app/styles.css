@@ -459,6 +459,34 @@ select {
 .toast.toast-error { border-color: var(--accent2); }
 .toast.toast-warning { border-color: var(--amber); }
 
+.logout-page {
+  min-height: calc(100vh - 48px);
+  display: grid;
+  place-items: center;
+}
+
+.logout-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 28px;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  text-align: center;
+  align-items: center;
+}
+
+.logout-card h1 {
+  font-size: 1.25rem;
+}
+
+.logout-card p {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 /* Trips dashboard */
 .trip-card {
   background: var(--surface);

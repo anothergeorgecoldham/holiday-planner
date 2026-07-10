@@ -47,7 +47,7 @@ function renderAuthControls() {
   if (currentUser) {
     container.innerHTML = `
       <span class="user-name">👤 ${currentUser.userDetails}</span>
-      <a href="/.auth/logout" class="btn btn-ghost btn-sm">Logout</a>
+      <a href="/.auth/logout?post_logout_redirect_uri=/logged-out.html" class="btn btn-ghost btn-sm">Logout</a>
     `;
   }
 }
