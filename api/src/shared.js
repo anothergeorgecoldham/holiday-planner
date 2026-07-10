@@ -51,6 +51,11 @@ function isTripMember(trip, principal) {
   const principalKeys = getPrincipalMemberKeys(principal);
   const members = normalizedList(trip?.members);
   const memberKeys = normalizedList(trip?.memberKeys);
+
+  if (!memberKeys.length && members.length === 1 && members[0] === getUsername(principal)) {
+    return true;
+  }
+
   return principalKeys.some(key => members.includes(key) || memberKeys.includes(key));
 }
 

@@ -410,6 +410,23 @@ select {
 .sync-status.error { color: var(--accent2); }
 .sync-status.syncing { color: var(--amber); }
 
+.current-trip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 5px 8px;
+  font-size: 0.8rem;
+  color: var(--text);
+}
+
+.current-trip .trip-id {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
 /* Auth controls */
 .auth-controls {
   display: flex;

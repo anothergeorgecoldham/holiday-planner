@@ -10,6 +10,7 @@ const tripId = new URLSearchParams(location.search).get('trip');
 let data = {};
 let cloudEtag = null; // optimistic concurrency token
 let currentUser = null;
+let currentTripName = null;
 
 /* ── Toast notifications ── */
 function showToast(message, type = 'info', duration = 4000) {
@@ -60,6 +61,37 @@ function setSyncStatus(status, text) {
   el.textContent = `${icons[status] || ''} ${text}`;
 }
 
+function renderCurrentTrip() {
+  const el = document.getElementById('current-trip');
+  if (!el) return;
+
+  if (!tripId) {
+    el.style.display = 'none';
+    el.replaceChildren();
+    return;
+  }
+
+  el.style.display = '';
+  el.replaceChildren();
+
+  const name = document.createElement('strong');
+  name.textContent = currentTripName || 'Loading trip...';
+
+  const id = document.createElement('span');
+  id.className = 'trip-id';
+  id.textContent = tripId;
+
+  const back = document.createElement('button');
+  back.className = 'btn btn-ghost btn-sm';
+  back.type = 'button';
+  back.textContent = 'My Trips';
+  back.addEventListener('click', () => {
+    window.location.href = window.location.pathname;
+  });
+
+  el.append('🧳 ', name, id, back);
+}
+
 /* ── Data loading ── */
 async function loadData() {
   // Load from localStorage as immediate fallback
@@ -70,25 +102,32 @@ async function loadData() {
   }
 
   if (tripId) {
+    renderCurrentTrip();
     setSyncStatus('syncing', 'Loading from cloud...');
     try {
       const res = await fetch(`/api/load?tripId=${encodeURIComponent(tripId)}`);
       if (res.ok) {
         const cloud = await res.json();
+        currentTripName = cloud.name || tripId;
         data = cloud.data || {};
         cloudEtag = cloud.etag || null;
         localStorage.setItem(storageKey, JSON.stringify(data));
+        renderCurrentTrip();
         setSyncStatus('synced', 'Synced');
       } else if (res.status === 401) {
         setSyncStatus('error', 'Login required');
         showToast('Please log in to access this trip.', 'warning');
       } else if (res.status === 403) {
+        currentTripName = 'Access denied';
+        renderCurrentTrip();
         setSyncStatus('error', 'Access denied');
         showToast('You do not have access to this trip.', 'error');
       } else if (res.status === 404) {
         // New trip - start fresh
+        currentTripName = tripId;
         data = {};
         cloudEtag = null;
+        renderCurrentTrip();
         setSyncStatus('synced', 'New trip');
       } else {
         console.warn('Cloud load returned non-OK status:', res.status);
