@@ -17,6 +17,10 @@
       "allowedRoles": ["anonymous"]
     },
     {
+      "route": "/styles.css",
+      "allowedRoles": ["anonymous"]
+    },
+    {
       "route": "/*",
       "allowedRoles": ["authenticated"]
     }
