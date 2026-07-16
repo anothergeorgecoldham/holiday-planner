@@ -346,6 +346,35 @@ function itemsForDate(dateKey) {
     });
 }
 
+function getStayLaneLayout(monthStart, monthEnd, startOffset, daysInMonth) {
+  const stays = getItinerary()
+    .filter(item => item.type === 'stay' && item.startDate <= monthEnd && item.endDate >= monthStart)
+    .sort((a, b) =>
+      a.startDate.localeCompare(b.startDate) ||
+      a.endDate.localeCompare(b.endDate) ||
+      String(a.name || '').localeCompare(String(b.name || ''))
+    );
+  const laneEnds = [];
+  const laneByStay = new Map();
+  const activeWeeks = new Set();
+
+  stays.forEach(stay => {
+    let lane = laneEnds.findIndex(endDate => endDate < stay.startDate);
+    if (lane === -1) lane = laneEnds.length;
+    laneEnds[lane] = stay.endDate;
+    laneByStay.set(stay, lane);
+  });
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateKey = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    if (stays.some(stay => itemOccursOn(stay, dateKey))) {
+      activeWeeks.add(Math.floor((startOffset + day - 1) / 7));
+    }
+  }
+
+  return { laneByStay, laneCount: laneEnds.length, activeWeeks };
+}
+
 function openAgenda(dateKey, label = formatDateKey(dateKey)) {
   activeKey = dateKey;
   document.getElementById('agenda-date-title').textContent = label;
@@ -678,16 +707,75 @@ function renderLegacyTags(entry, container) {
   });
 }
 
+function createStayTag(item, dateKey, monthStart, monthEnd) {
+  const dayIndex = (parseDateKey(dateKey).getDay() + 6) % 7;
+  const isCheckIn = item.startDate === dateKey;
+  const isCheckOut = item.endDate === dateKey;
+  const startsRow = dayIndex === 0 || dateKey === monthStart;
+  const endsRow = dayIndex === 6 || dateKey === monthEnd;
+  const segmentStart = isCheckIn || startsRow;
+  const segmentEnd = isCheckOut || endsRow;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = [
+    'tag',
+    'tag-stay',
+    segmentStart ? 'segment-start' : '',
+    segmentEnd ? 'segment-end' : '',
+    isCheckIn ? 'stay-check-in' : '',
+    isCheckOut ? 'stay-check-out' : '',
+    !isCheckIn && !isCheckOut ? 'stay-continuation' : '',
+  ].filter(Boolean).join(' ');
+
+  if (isCheckIn || isCheckOut) {
+    const state = document.createElement('span');
+    state.className = 'stay-state';
+    state.textContent = isCheckIn && isCheckOut ? 'In/out' : isCheckIn ? 'Check in' : 'Check out';
+    const name = document.createElement('span');
+    name.className = 'stay-name';
+    name.textContent = item.name;
+    button.append(state, name);
+  } else if (startsRow) {
+    const name = document.createElement('span');
+    name.className = 'stay-name';
+    name.textContent = item.name;
+    button.appendChild(name);
+  } else {
+    button.textContent = '\u00a0';
+  }
+
+  button.title = `${item.name}: ${formatDateKey(item.startDate)} to ${formatDateKey(item.endDate)}`;
+  button.setAttribute(
+    'aria-label',
+    `${isCheckIn ? 'Check in to' : isCheckOut ? 'Check out from' : 'Staying at'} ${item.name}. Open details.`
+  );
+  button.addEventListener('click', event => {
+    event.stopPropagation();
+    openEntry(item.type, dateKey, item);
+  });
+  return button;
+}
+
+function renderStayLanes(container, stays, stayLayout, weekIndex, dateKey, monthStart, monthEnd) {
+  if (!stayLayout.laneCount || !stayLayout.activeWeeks.has(weekIndex)) return;
+  const lanes = document.createElement('div');
+  lanes.className = 'stay-lanes';
+  const stayByLane = new Map(stays.map(stay => [stayLayout.laneByStay.get(stay), stay]));
+
+  for (let lane = 0; lane < stayLayout.laneCount; lane++) {
+    const slot = document.createElement('div');
+    slot.className = 'stay-lane';
+    const stay = stayByLane.get(lane);
+    if (stay) slot.appendChild(createStayTag(stay, dateKey, monthStart, monthEnd));
+    lanes.appendChild(slot);
+  }
+  container.appendChild(lanes);
+}
+
 function createItineraryTag(item, dateKey) {
   let text = item.name;
   let className = '';
-  if (item.type === 'stay') {
-    const dayIndex = (parseDateKey(dateKey).getDay() + 6) % 7;
-    const segmentStart = item.startDate === dateKey || dayIndex === 0;
-    const segmentEnd = item.endDate === dateKey || dayIndex === 6;
-    className = `tag-stay${segmentStart ? ' segment-start' : ''}${segmentEnd ? ' segment-end' : ''}`;
-    text = segmentStart ? item.name : '\u00a0';
-  } else if (item.type === 'transport') {
+  if (item.type === 'transport') {
     const isArrival = item.endDate && item.endDate !== item.startDate && item.endDate === dateKey;
     const time = isArrival ? item.endTime : item.startTime;
     text = `${time ? `${formatTime(time)} ` : ''}${isArrival ? 'Arrive: ' : ''}${item.name}`;
@@ -728,6 +816,9 @@ function render() {
   const firstDay = new Date(viewYear, viewMonth, 1).getDay();
   const startOffset = (firstDay + 6) % 7;
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const monthStart = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-01`;
+  const monthEnd = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
+  const stayLayout = getStayLaneLayout(monthStart, monthEnd, startOffset, daysInMonth);
 
   for (let i = 0; i < startOffset; i++) {
     const empty = document.createElement('div');
@@ -752,7 +843,17 @@ function render() {
     num.setAttribute('aria-label', `Open ${label}`);
     cell.appendChild(num);
 
-    itemsForDate(dateKey).forEach(item => {
+    const dayItems = itemsForDate(dateKey);
+    renderStayLanes(
+      cell,
+      dayItems.filter(item => item.type === 'stay'),
+      stayLayout,
+      Math.floor((startOffset + d - 1) / 7),
+      dateKey,
+      monthStart,
+      monthEnd
+    );
+    dayItems.filter(item => item.type !== 'stay').forEach(item => {
       cell.appendChild(createItineraryTag(item, dateKey));
     });
     renderLegacyTags(entry, cell);
