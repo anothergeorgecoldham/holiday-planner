@@ -144,7 +144,13 @@ async function loadData() {
 
 /* ── Data saving ── */
 async function save() {
-  localStorage.setItem(storageKey, JSON.stringify(data));
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(data));
+  } catch (error) {
+    console.warn('Local save failed.', error);
+    showToast('This device could not save your changes. Free some browser storage and try again.', 'error', 6000);
+    return false;
+  }
 
   if (tripId) {
     setSyncStatus('syncing', 'Saving...');
@@ -164,6 +170,7 @@ async function save() {
         const result = await res.json();
         cloudEtag = result.etag || null;
         setSyncStatus('synced', 'Synced');
+        return true;
       } else if (res.status === 409) {
         setSyncStatus('error', 'Conflict');
         showToast('Someone else updated this trip. Please reload to get the latest version.', 'warning', 6000);
@@ -177,11 +184,15 @@ async function save() {
         console.warn('Cloud save returned non-OK status:', res.status);
         setSyncStatus('error', 'Save failed');
       }
+      return false;
     } catch (e) {
       console.warn('Cloud save failed; local data preserved.', e);
       setSyncStatus('error', 'Offline');
+      showToast('Saved on this device, but the trip is offline. Reconnect and save again to sync.', 'warning', 6000);
+      return false;
     }
   }
+  return true;
 }
 
 /* ── Navigation ── */
@@ -217,309 +228,437 @@ function syncYearSelect() {
   yearSel.value = viewYear;
 }
 
-/* ── Day popover ── */
-let activePopover = null;
-let popoverDateKey = null;
-
+/* ── Itinerary data and editors ── */
+const ITINERARY_KEY = '_itinerary';
 const DEFAULT_FIELD_ORDER = ['flights', 'accom', 'transit', 'activity', 'ref', 'notes'];
+const TYPE_LABELS = { stay: 'Stay', transport: 'Transport', activity: 'Activity' };
+const MODE_LABELS = { flight: 'Flight', train: 'Train', bus: 'Bus', ferry: 'Ferry', car: 'Car' };
 
-function closePopover() {
-  if (activePopover) {
-    activePopover.remove();
-    activePopover = null;
-    popoverDateKey = null;
-  }
-}
-
-function showPopover(dateKey, label, cellEl) {
-  // If tapping same cell again, open modal
-  if (popoverDateKey === dateKey) {
-    closePopover();
-    openModal(dateKey, label);
-    return;
-  }
-
-  closePopover();
-  popoverDateKey = dateKey;
-
-  const entry = data[dateKey] || {};
-  const hasContent = entry.flyOut || entry.flyIn ||
-    entry.accom || entry.transit || entry.activity || entry.ref || entry.notes;
-
-  // If no content, skip straight to modal
-  if (!hasContent) {
-    popoverDateKey = null;
-    openModal(dateKey, label);
-    return;
-  }
-
-  const popover = document.createElement('div');
-  popover.className = 'day-popover';
-
-  // Header
-  const header = document.createElement('div');
-  header.className = 'popover-header';
-  const dateTitle = document.createElement('span');
-  dateTitle.className = 'popover-date';
-  dateTitle.textContent = label;
-  const editBtn = document.createElement('button');
-  editBtn.className = 'popover-edit';
-  editBtn.textContent = '✎ Edit';
-  editBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    closePopover();
-    openModal(dateKey, label);
-  });
-  header.appendChild(dateTitle);
-  header.appendChild(editBtn);
-  popover.appendChild(header);
-
-  // Tags (full text, no truncation) — in field order
-  renderFieldTags(entry, popover);
-  if (entry.notes) {
-    const notesEl = document.createElement('div');
-    notesEl.className = 'tag';
-    notesEl.style.cssText = 'white-space:normal;color:var(--muted);font-size:0.75rem;';
-    notesEl.textContent = '📝 ' + entry.notes;
-    popover.appendChild(notesEl);
-  }
-
-  document.body.appendChild(popover);
-  activePopover = popover;
-
-  // Position relative to cell
-  const rect = cellEl.getBoundingClientRect();
-  const popRect = popover.getBoundingClientRect();
-  let top = rect.bottom + 6;
-  let left = rect.left + (rect.width / 2) - (popRect.width / 2);
-
-  // Keep within viewport
-  if (top + popRect.height > window.innerHeight - 12) {
-    top = rect.top - popRect.height - 6;
-  }
-  if (left < 8) left = 8;
-  if (left + popRect.width > window.innerWidth - 8) {
-    left = window.innerWidth - popRect.width - 8;
-  }
-
-  popover.style.top = top + 'px';
-  popover.style.left = left + 'px';
-}
-
-// Close popover when clicking outside
-document.addEventListener('click', (e) => {
-  if (activePopover && !activePopover.contains(e.target) && !e.target.closest('.day-cell')) {
-    closePopover();
-  }
-});
-
-/* ── Modal state ── */
 let activeKey = null;
 
-const overlay  = document.getElementById('modal-overlay');
-const fFlyOut  = document.getElementById('field-fly-out');
-const fFlyIn   = document.getElementById('field-fly-in');
-const fAccom   = document.getElementById('field-accom');
+const agendaDialog = document.getElementById('agenda-dialog');
+const entryDialog = document.getElementById('entry-dialog');
+const entryForm = document.getElementById('entry-form');
+const fFlyOut = document.getElementById('field-fly-out');
+const fFlyIn = document.getElementById('field-fly-in');
+const fAccom = document.getElementById('field-accom');
 const fTransit = document.getElementById('field-transit');
-const fActivity= document.getElementById('field-activity');
-const fRef     = document.getElementById('field-ref');
-const fNotes   = document.getElementById('field-notes');
+const fActivity = document.getElementById('field-activity');
+const fRef = document.getElementById('field-ref');
+const fNotes = document.getElementById('field-notes');
 
-function openModal(dateKey, label) {
-  closePopover();
-  activeKey = dateKey;
-  document.getElementById('modal-date-title').textContent = label;
-  const d = data[dateKey] || {};
-  fFlyOut.checked    = !!d.flyOut;
-  fFlyIn.checked     = !!d.flyIn;
-  fAccom.value       = d.accom    || '';
-  fTransit.value     = d.transit  || '';
-  fActivity.value    = d.activity || '';
-  fRef.value         = d.ref      || '';
-  fNotes.value       = d.notes    || '';
-  setFieldOrder(d.fieldOrder);
-  setupDragAndDrop();
-  overlay.classList.add('open');
-  fAccom.focus();
+function getItinerary() {
+  if (!Array.isArray(data[ITINERARY_KEY])) data[ITINERARY_KEY] = [];
+  return data[ITINERARY_KEY];
 }
 
-function closeModal() {
-  overlay.classList.remove('open');
-  activeKey = null;
+function parseDateKey(dateKey) {
+  return new Date(`${dateKey}T12:00:00`);
 }
 
-document.getElementById('modal-close').addEventListener('click', closeModal);
-document.getElementById('btn-cancel').addEventListener('click', closeModal);
-overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+function formatDateKey(dateKey) {
+  if (!dateKey) return '';
+  return parseDateKey(dateKey).toLocaleDateString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
 
-document.getElementById('btn-save').addEventListener('click', async () => {
-  if (!activeKey) return;
-  const entry = {
-    flyOut:   fFlyOut.checked,
-    flyIn:    fFlyIn.checked,
-    accom:    fAccom.value.trim(),
-    transit:  fTransit.value.trim(),
-    activity: fActivity.value.trim(),
-    ref:      fRef.value.trim(),
-    notes:    fNotes.value.trim(),
-    fieldOrder: getFieldOrder(),
-  };
-  const hasContent = entry.flyOut || entry.flyIn ||
-    entry.accom || entry.transit || entry.activity || entry.ref || entry.notes;
-  if (hasContent) {
-    data[activeKey] = entry;
-  } else {
-    delete data[activeKey];
+function formatTime(value) {
+  if (!value) return '';
+  const [hours, minutes] = value.split(':').map(Number);
+  return new Date(2000, 0, 1, hours, minutes).toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function itemOccursOn(item, dateKey) {
+  if (item.type === 'stay') {
+    return item.startDate <= dateKey && item.endDate >= dateKey;
   }
-  await save();
-  closeModal();
-  render();
+  if (item.type === 'transport') {
+    return item.startDate === dateKey || (item.endDate && item.endDate !== item.startDate && item.endDate === dateKey);
+  }
+  return item.date === dateKey;
+}
+
+function itemsForDate(dateKey) {
+  return getItinerary()
+    .filter(item => itemOccursOn(item, dateKey))
+    .sort((a, b) => {
+      if (a.type === 'stay' && b.type !== 'stay') return -1;
+      if (a.type !== 'stay' && b.type === 'stay') return 1;
+      const aTime = a.startTime || '';
+      const bTime = b.startTime || '';
+      return aTime.localeCompare(bTime) || String(a.name || '').localeCompare(String(b.name || ''));
+    });
+}
+
+function openAgenda(dateKey, label = formatDateKey(dateKey)) {
+  activeKey = dateKey;
+  document.getElementById('agenda-date-title').textContent = label;
+
+  const legacy = data[dateKey] || {};
+  fFlyOut.checked = !!legacy.flyOut;
+  fFlyIn.checked = !!legacy.flyIn;
+  fAccom.value = legacy.accom || '';
+  fTransit.value = legacy.transit || '';
+  fActivity.value = legacy.activity || '';
+  fRef.value = legacy.ref || '';
+  fNotes.value = legacy.notes || '';
+
+  const hasLegacy = legacy.flyOut || legacy.flyIn || legacy.accom ||
+    legacy.transit || legacy.activity || legacy.ref || legacy.notes;
+  document.getElementById('legacy-notes').open = !!hasLegacy;
+  renderAgenda();
+  agendaDialog.showModal();
+}
+
+function renderAgenda() {
+  const container = document.getElementById('agenda-items');
+  const items = itemsForDate(activeKey);
+  container.replaceChildren();
+
+  if (!items.length) {
+    const empty = document.createElement('div');
+    empty.className = 'agenda-empty';
+    empty.textContent = 'Nothing planned yet. Add a stay, journey, or activity.';
+    container.appendChild(empty);
+    return;
+  }
+
+  items.forEach(item => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'agenda-item';
+
+    const time = document.createElement('span');
+    time.className = 'agenda-item-time';
+    if (item.type === 'stay') {
+      if (activeKey === item.startDate) time.textContent = item.startTime ? `Check in ${formatTime(item.startTime)}` : 'Check in';
+      else if (activeKey === item.endDate) time.textContent = item.endTime ? `Check out ${formatTime(item.endTime)}` : 'Check out';
+      else time.textContent = 'Staying';
+    } else if (item.type === 'transport' && activeKey === item.endDate && item.endDate !== item.startDate) {
+      time.textContent = item.endTime ? `Arrive ${formatTime(item.endTime)}` : 'Arrive';
+    } else {
+      time.textContent = formatTime(item.startTime) || 'Any time';
+    }
+
+    const detail = document.createElement('span');
+    const name = document.createElement('span');
+    name.className = 'agenda-item-name';
+    name.textContent = item.name;
+    const type = document.createElement('span');
+    type.className = 'agenda-item-type';
+    type.textContent = item.type === 'transport' ? MODE_LABELS[item.mode] || 'Transport' : TYPE_LABELS[item.type];
+    detail.append(name, type);
+
+    const arrow = document.createElement('span');
+    arrow.className = 'agenda-item-arrow';
+    arrow.setAttribute('aria-hidden', 'true');
+    arrow.textContent = '›';
+
+    button.append(time, detail, arrow);
+    button.addEventListener('click', () => {
+      agendaDialog.close();
+      openEntry(item.type, activeKey, item);
+    });
+    container.appendChild(button);
+  });
+}
+
+function setEntryType(type) {
+  document.getElementById('entry-type').value = type;
+  document.getElementById('entry-title').textContent = `${document.getElementById('entry-id').value ? 'Edit' : 'Add'} ${type === 'activity' ? 'an activity' : `a ${type}`}`;
+  document.querySelectorAll('[data-entry-fields]').forEach(fields => {
+    fields.classList.toggle('active', fields.dataset.entryFields === type);
+  });
+  document.getElementById('entry-address-label').textContent =
+    type === 'activity' ? 'Location or address' : type === 'transport' ? 'Meeting point or address' : 'Address';
+}
+
+function openEntry(type, dateKey, item = null) {
+  activeKey = dateKey;
+  entryForm.reset();
+  document.getElementById('entry-form-error').textContent = '';
+  document.getElementById('entry-name-error').textContent = '';
+  document.getElementById('entry-id').value = item?.id || '';
+  document.getElementById('entry-kicker').textContent = item ? 'Plan details' : 'New plan';
+  document.getElementById('btn-delete-entry').style.display = item ? '' : 'none';
+  setEntryType(type);
+
+  document.getElementById('entry-name').value = item?.name || '';
+  document.getElementById('entry-address').value = item?.address || '';
+  document.getElementById('entry-booking-ref').value = item?.bookingRef || '';
+  document.getElementById('entry-notes').value = item?.notes || '';
+
+  if (type === 'stay') {
+    document.getElementById('stay-start-date').value = item?.startDate || dateKey;
+    document.getElementById('stay-start-time').value = item?.startTime || '';
+    document.getElementById('stay-end-date').value = item?.endDate || dateKey;
+    document.getElementById('stay-end-time').value = item?.endTime || '';
+  } else if (type === 'transport') {
+    document.getElementById('transport-mode').value = item?.mode || 'flight';
+    document.getElementById('transport-number').value = item?.serviceNumber || '';
+    document.getElementById('transport-start-date').value = item?.startDate || dateKey;
+    document.getElementById('transport-start-time').value = item?.startTime || '';
+    document.getElementById('transport-end-date').value = item?.endDate || dateKey;
+    document.getElementById('transport-end-time').value = item?.endTime || '';
+    document.getElementById('transport-from').value = item?.from || '';
+    document.getElementById('transport-to').value = item?.to || '';
+    document.getElementById('transport-start-terminal').value = item?.startTerminal || '';
+    document.getElementById('transport-end-terminal').value = item?.endTerminal || '';
+    updateTransportFields();
+  } else {
+    document.getElementById('activity-date').value = item?.date || dateKey;
+    document.getElementById('activity-start-time').value = item?.startTime || '';
+    document.getElementById('activity-end-time').value = item?.endTime || '';
+  }
+
+  entryDialog.showModal();
+  document.getElementById('entry-name').focus();
+}
+
+function updateTransportFields() {
+  const mode = document.getElementById('transport-mode').value;
+  const labels = {
+    flight: ['Flight number', 'Departure airport', 'Arrival airport'],
+    train: ['Train or service number', 'Departure station', 'Arrival station'],
+    bus: ['Bus or route number', 'Departure stop', 'Arrival stop'],
+    ferry: ['Ferry or service number', 'Departure port', 'Arrival port'],
+    car: ['Reservation number', 'Pickup location', 'Drop-off location'],
+  };
+  const [number, from, to] = labels[mode];
+  document.getElementById('transport-number-label').textContent = number;
+  document.getElementById('transport-from-label').textContent = from;
+  document.getElementById('transport-to-label').textContent = to;
+  document.querySelectorAll('.transport-terminal').forEach(field => {
+    field.style.display = mode === 'flight' ? '' : 'none';
+  });
+}
+
+function buildEntryFromForm() {
+  const type = document.getElementById('entry-type').value;
+  const item = {
+    id: document.getElementById('entry-id').value ||
+      (globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `plan-${Date.now()}-${Math.random().toString(16).slice(2)}`),
+    type,
+    name: document.getElementById('entry-name').value.trim(),
+    address: document.getElementById('entry-address').value.trim(),
+    bookingRef: document.getElementById('entry-booking-ref').value.trim(),
+    notes: document.getElementById('entry-notes').value.trim(),
+  };
+
+  if (type === 'stay') {
+    Object.assign(item, {
+      startDate: document.getElementById('stay-start-date').value,
+      startTime: document.getElementById('stay-start-time').value,
+      endDate: document.getElementById('stay-end-date').value,
+      endTime: document.getElementById('stay-end-time').value,
+    });
+  } else if (type === 'transport') {
+    const mode = document.getElementById('transport-mode').value;
+    Object.assign(item, {
+      mode,
+      serviceNumber: document.getElementById('transport-number').value.trim(),
+      startDate: document.getElementById('transport-start-date').value,
+      startTime: document.getElementById('transport-start-time').value,
+      endDate: document.getElementById('transport-end-date').value,
+      endTime: document.getElementById('transport-end-time').value,
+      from: document.getElementById('transport-from').value.trim(),
+      to: document.getElementById('transport-to').value.trim(),
+      startTerminal: mode === 'flight' ? document.getElementById('transport-start-terminal').value.trim() : '',
+      endTerminal: mode === 'flight' ? document.getElementById('transport-end-terminal').value.trim() : '',
+    });
+  } else {
+    Object.assign(item, {
+      date: document.getElementById('activity-date').value,
+      startTime: document.getElementById('activity-start-time').value,
+      endTime: document.getElementById('activity-end-time').value,
+    });
+  }
+  return item;
+}
+
+function validateEntry(item) {
+  const nameInput = document.getElementById('entry-name');
+  nameInput.removeAttribute('aria-invalid');
+  document.getElementById('entry-name-error').textContent = '';
+  document.getElementById('entry-form-error').textContent = '';
+
+  if (!item.name) {
+    nameInput.setAttribute('aria-invalid', 'true');
+    document.getElementById('entry-name-error').textContent = 'Please enter a name for this plan.';
+    nameInput.focus();
+    return false;
+  }
+
+  const requiredDate = item.type === 'activity' ? item.date : item.startDate;
+  if (!requiredDate || (item.type === 'stay' && !item.endDate)) {
+    document.getElementById('entry-form-error').textContent = 'Please add the required date fields.';
+    return false;
+  }
+  if (item.type === 'stay' && item.endDate < item.startDate) {
+    document.getElementById('entry-form-error').textContent = 'Check-out cannot be before check-in.';
+    return false;
+  }
+  if (item.type === 'transport' && item.endDate && item.endDate < item.startDate) {
+    document.getElementById('entry-form-error').textContent = 'Arrival cannot be before departure.';
+    return false;
+  }
+  const sameDayEndBeforeStart = item.startTime && item.endTime && item.endTime < item.startTime && (
+    item.type === 'activity' ||
+    (item.type === 'stay' && item.startDate === item.endDate) ||
+    (item.type === 'transport' && (!item.endDate || item.startDate === item.endDate))
+  );
+  if (sameDayEndBeforeStart) {
+    document.getElementById('entry-form-error').textContent = 'The end time cannot be before the start time on the same day.';
+    return false;
+  }
+  return true;
+}
+
+document.getElementById('agenda-close').addEventListener('click', () => agendaDialog.close());
+document.getElementById('entry-close').addEventListener('click', () => entryDialog.close());
+document.getElementById('btn-cancel-entry').addEventListener('click', () => entryDialog.close());
+document.getElementById('transport-mode').addEventListener('change', updateTransportFields);
+
+document.querySelectorAll('[data-add-type]').forEach(button => {
+  button.addEventListener('click', () => {
+    agendaDialog.close();
+    openEntry(button.dataset.addType, activeKey);
+  });
 });
 
-document.getElementById('btn-clear').addEventListener('click', async () => {
+document.getElementById('btn-save-day').addEventListener('click', async () => {
   if (!activeKey) return;
-  delete data[activeKey];
-  await save();
-  closeModal();
+  const existing = data[activeKey] || {};
+  const legacy = {
+    flyOut: fFlyOut.checked,
+    flyIn: fFlyIn.checked,
+    accom: fAccom.value.trim(),
+    transit: fTransit.value.trim(),
+    activity: fActivity.value.trim(),
+    ref: fRef.value.trim(),
+    notes: fNotes.value.trim(),
+    fieldOrder: existing.fieldOrder || DEFAULT_FIELD_ORDER,
+  };
+  const hasContent = legacy.flyOut || legacy.flyIn || legacy.accom ||
+    legacy.transit || legacy.activity || legacy.ref || legacy.notes;
+  if (hasContent) data[activeKey] = legacy;
+  else delete data[activeKey];
+  const saved = await save();
+  if (!saved) return;
   render();
+  showToast('Day notes saved.', 'info', 2200);
 });
 
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeModal();
+document.getElementById('btn-clear-day').addEventListener('click', async () => {
+  if (!activeKey || !confirm('Clear the notes and older entries for this day? Structured plans will stay in place.')) return;
+  delete data[activeKey];
+  fFlyOut.checked = false;
+  fFlyIn.checked = false;
+  fAccom.value = '';
+  fTransit.value = '';
+  fActivity.value = '';
+  fRef.value = '';
+  fNotes.value = '';
+  const saved = await save();
+  if (!saved) return;
+  render();
+  showToast('Day notes cleared.', 'info', 2200);
 });
 
-/* ── Field order rendering helper ── */
-function renderFieldTags(entry, container) {
+entryForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  const item = buildEntryFromForm();
+  if (!validateEntry(item)) return;
+
+  const itinerary = getItinerary();
+  const existingIndex = itinerary.findIndex(existing => existing.id === item.id);
+  if (existingIndex >= 0) itinerary[existingIndex] = item;
+  else itinerary.push(item);
+
+  const saveButton = document.getElementById('btn-save-entry');
+  saveButton.disabled = true;
+  saveButton.textContent = 'Saving...';
+  const saved = await save();
+  if (!saved) {
+    saveButton.disabled = false;
+    saveButton.textContent = 'Save plan';
+    return;
+  }
+  saveButton.disabled = false;
+  saveButton.textContent = 'Save plan';
+  entryDialog.close();
+  render();
+  openAgenda(activeKey);
+});
+
+document.getElementById('btn-delete-entry').addEventListener('click', async () => {
+  const id = document.getElementById('entry-id').value;
+  if (!id || !confirm('Delete this plan? This cannot be undone.')) return;
+  data[ITINERARY_KEY] = getItinerary().filter(item => item.id !== id);
+  const saved = await save();
+  if (!saved) return;
+  entryDialog.close();
+  render();
+  openAgenda(activeKey);
+  showToast('Plan deleted.', 'info', 2200);
+});
+
+/* ── Legacy day rendering ── */
+function renderLegacyTags(entry, container) {
   const order = entry.fieldOrder || DEFAULT_FIELD_ORDER;
   order.forEach(field => {
     if (field === 'flights') {
-      if (entry.flyOut) container.appendChild(tag('✈️ Fly out', 'tag-flight-out'));
-      if (entry.flyIn)  container.appendChild(tag('🛬 Fly in',  'tag-flight-in'));
+      if (entry.flyOut) container.appendChild(tag('Flying out', 'tag-flight-out tag-legacy'));
+      if (entry.flyIn) container.appendChild(tag('Flying in', 'tag-flight-in tag-legacy'));
     } else if (field === 'accom' && entry.accom) {
-      entry.accom.split('\n').filter(l => l.trim()).forEach(line => {
-        container.appendChild(tag('🏨 ' + line.trim(), 'tag-accom'));
-      });
+      entry.accom.split('\n').filter(Boolean).forEach(line => container.appendChild(tag(line.trim(), 'tag-accom tag-legacy')));
     } else if (field === 'transit' && entry.transit) {
-      entry.transit.split('\n').filter(l => l.trim()).forEach(line => {
-        container.appendChild(tag('🚂 ' + line.trim(), 'tag-transit'));
-      });
+      entry.transit.split('\n').filter(Boolean).forEach(line => container.appendChild(tag(line.trim(), 'tag-transit tag-legacy')));
     } else if (field === 'activity' && entry.activity) {
-      entry.activity.split('\n').filter(l => l.trim()).forEach(line => {
-        container.appendChild(tag('🎯 ' + line.trim(), 'tag-activity'));
-      });
+      entry.activity.split('\n').filter(Boolean).forEach(line => container.appendChild(tag(line.trim(), 'tag-activity tag-legacy')));
     } else if (field === 'ref' && entry.ref) {
-      entry.ref.split('\n').filter(l => l.trim()).forEach(line => {
-        container.appendChild(tag('🔖 ' + line.trim(), 'tag-ref'));
-      });
+      entry.ref.split('\n').filter(Boolean).forEach(line => container.appendChild(tag(line.trim(), 'tag-ref tag-legacy')));
     }
   });
 }
 
-/* ── Modal drag-and-drop reordering ── */
-function setupDragAndDrop() {
-  const container = document.getElementById('modal-fields');
-  if (!container) return;
+function createItineraryTag(item, dateKey) {
+  let text = item.name;
+  let className = '';
+  if (item.type === 'stay') {
+    const dayIndex = (parseDateKey(dateKey).getDay() + 6) % 7;
+    const segmentStart = item.startDate === dateKey || dayIndex === 0;
+    const segmentEnd = item.endDate === dateKey || dayIndex === 6;
+    className = `tag-stay${segmentStart ? ' segment-start' : ''}${segmentEnd ? ' segment-end' : ''}`;
+    text = segmentStart ? item.name : '\u00a0';
+  } else if (item.type === 'transport') {
+    const isArrival = item.endDate && item.endDate !== item.startDate && item.endDate === dateKey;
+    const time = isArrival ? item.endTime : item.startTime;
+    text = `${time ? `${formatTime(time)} ` : ''}${isArrival ? 'Arrive: ' : ''}${item.name}`;
+    className = 'tag-transport';
+  } else {
+    text = `${item.startTime ? `${formatTime(item.startTime)} ` : ''}${item.name}`;
+    className = 'tag-itinerary-activity';
+  }
 
-  let draggedEl = null;
-
-  container.querySelectorAll('.modal-field-wrapper').forEach(wrapper => {
-    wrapper.setAttribute('draggable', 'true');
-
-    wrapper.addEventListener('dragstart', (e) => {
-      draggedEl = wrapper;
-      wrapper.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', wrapper.dataset.field);
-    });
-
-    wrapper.addEventListener('dragend', () => {
-      wrapper.classList.remove('dragging');
-      container.querySelectorAll('.modal-field-wrapper').forEach(w => w.classList.remove('drag-over'));
-      draggedEl = null;
-    });
-
-    wrapper.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      if (wrapper !== draggedEl) {
-        wrapper.classList.add('drag-over');
-      }
-    });
-
-    wrapper.addEventListener('dragleave', () => {
-      wrapper.classList.remove('drag-over');
-    });
-
-    wrapper.addEventListener('drop', (e) => {
-      e.preventDefault();
-      wrapper.classList.remove('drag-over');
-      if (draggedEl && draggedEl !== wrapper) {
-        const allWrappers = [...container.querySelectorAll('.modal-field-wrapper')];
-        const dragIdx = allWrappers.indexOf(draggedEl);
-        const dropIdx = allWrappers.indexOf(wrapper);
-        if (dragIdx < dropIdx) {
-          container.insertBefore(draggedEl, wrapper.nextSibling);
-        } else {
-          container.insertBefore(draggedEl, wrapper);
-        }
-      }
-    });
-
-    // Touch support for mobile drag
-    let touchStartY = 0;
-    let touchClone = null;
-
-    wrapper.querySelector('.drag-handle').addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      draggedEl = wrapper;
-      touchStartY = e.touches[0].clientY;
-      wrapper.classList.add('dragging');
-    });
-
-    document.addEventListener('touchmove', (e) => {
-      if (!draggedEl || draggedEl !== wrapper) return;
-      const touch = e.touches[0];
-      const elemBelow = document.elementFromPoint(touch.clientX, touch.clientY);
-      const targetWrapper = elemBelow?.closest('.modal-field-wrapper');
-      container.querySelectorAll('.modal-field-wrapper').forEach(w => w.classList.remove('drag-over'));
-      if (targetWrapper && targetWrapper !== draggedEl) {
-        targetWrapper.classList.add('drag-over');
-      }
-    });
-
-    document.addEventListener('touchend', () => {
-      if (!draggedEl || draggedEl !== wrapper) return;
-      const overEl = container.querySelector('.modal-field-wrapper.drag-over');
-      if (overEl) {
-        const allWrappers = [...container.querySelectorAll('.modal-field-wrapper')];
-        const dragIdx = allWrappers.indexOf(draggedEl);
-        const dropIdx = allWrappers.indexOf(overEl);
-        if (dragIdx < dropIdx) {
-          container.insertBefore(draggedEl, overEl.nextSibling);
-        } else {
-          container.insertBefore(draggedEl, overEl);
-        }
-      }
-      container.querySelectorAll('.modal-field-wrapper').forEach(w => w.classList.remove('drag-over'));
-      wrapper.classList.remove('dragging');
-      draggedEl = null;
-    });
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = `tag ${className}`;
+  button.textContent = text;
+  button.title = item.name;
+  button.setAttribute('aria-label', `${TYPE_LABELS[item.type]}: ${item.name}. Open details.`);
+  button.addEventListener('click', event => {
+    event.stopPropagation();
+    openEntry(item.type, dateKey, item);
   });
-}
-
-function getFieldOrder() {
-  const container = document.getElementById('modal-fields');
-  return [...container.querySelectorAll('.modal-field-wrapper')].map(w => w.dataset.field);
-}
-
-function setFieldOrder(order) {
-  const container = document.getElementById('modal-fields');
-  const wrappers = [...container.querySelectorAll('.modal-field-wrapper')];
-  const byField = {};
-  wrappers.forEach(w => { byField[w.dataset.field] = w; });
-  (order || DEFAULT_FIELD_ORDER).forEach(field => {
-    if (byField[field]) container.appendChild(byField[field]);
-  });
+  return button;
 }
 
 /* ── Render ── */
@@ -553,24 +692,23 @@ function render() {
 
     const cell = document.createElement('div');
     cell.className = 'day-cell';
+    const label = `${DAYS[(startOffset + d - 1) % 7]} ${d} ${MONTHS[viewMonth]} ${viewYear}`;
 
     const isToday = (d === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear());
     if (isToday) cell.classList.add('today');
-    if (entry.flyOut) cell.classList.add('fly-out');
-    if (entry.flyIn)  cell.classList.add('fly-in');
-
-    const num = document.createElement('div');
+    const num = document.createElement('button');
+    num.type = 'button';
     num.className = 'day-num';
     num.textContent = d;
+    num.setAttribute('aria-label', `Open ${label}`);
     cell.appendChild(num);
 
-    renderFieldTags(entry, cell);
-
-    const label = `${DAYS[(startOffset + d - 1) % 7]} ${d} ${MONTHS[viewMonth]} ${viewYear}`;
-    cell.addEventListener('click', (e) => {
-      e.stopPropagation();
-      showPopover(dateKey, label, cell);
+    itemsForDate(dateKey).forEach(item => {
+      cell.appendChild(createItineraryTag(item, dateKey));
     });
+    renderLegacyTags(entry, cell);
+
+    cell.addEventListener('click', () => openAgenda(dateKey, label));
 
     cal.appendChild(cell);
   }
@@ -604,23 +742,33 @@ function importData(file) {
       const raw = e.target.result.trim();
       if (!raw.startsWith(FILE_MAGIC)) throw new Error('Unrecognised file format.');
       const decoded = JSON.parse(decodeURIComponent(escape(atob(raw.slice(FILE_MAGIC.length)))));
-      if (typeof decoded !== 'object' || decoded === null) throw new Error('Invalid data.');
+      if (typeof decoded !== 'object' || decoded === null || Array.isArray(decoded)) throw new Error('Invalid data.');
       const existing = Object.keys(data).length;
       if (existing > 0) {
+        const importedDays = Object.keys(decoded).filter(key => key !== ITINERARY_KEY).length;
+        const importedPlans = Array.isArray(decoded[ITINERARY_KEY]) ? decoded[ITINERARY_KEY].length : 0;
         const merge = confirm(
-          `Import contains ${Object.keys(decoded).length} day(s).\n\n` +
-          `OK → Merge with existing data (imported days overwrite conflicts)\n` +
+          `Import contains ${importedDays} day(s) and ${importedPlans} structured plan(s).\n\n` +
+          `OK → Merge with existing data (imported entries overwrite matching entries)\n` +
           `Cancel → Replace all existing data`
         );
         if (merge) {
+          const currentItems = getItinerary();
+          const importedItems = Array.isArray(decoded[ITINERARY_KEY]) ? decoded[ITINERARY_KEY] : [];
           Object.assign(data, decoded);
+          const mergedItems = new Map();
+          [...currentItems, ...importedItems].forEach((item, index) => {
+            mergedItems.set(item.id || `legacy-import-${index}`, item);
+          });
+          data[ITINERARY_KEY] = [...mergedItems.values()];
         } else {
           data = decoded;
         }
       } else {
         data = decoded;
       }
-      await save();
+      const saved = await save();
+      if (!saved) return;
       render();
     } catch (err) {
       alert('Import failed: ' + err.message);

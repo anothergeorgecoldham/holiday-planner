@@ -2,22 +2,22 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Holiday Planner</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
 
 <header>
-  <div class="app-title">✈️ <span>Holiday</span> Planner</div>
+  <div class="app-title"><span>Holiday</span> Planner</div>
   <div class="header-right">
     <div id="current-trip" class="current-trip" style="display:none"></div>
     <div id="sync-status" class="sync-status"></div>
     <div id="auth-controls" class="auth-controls"></div>
     <div class="io-controls">
-      <button class="btn btn-ghost btn-sm" id="btn-share" title="Share trip" style="display:none">👥 Share</button>
-      <button class="btn btn-ghost btn-sm" id="btn-export" title="Export data to file">⬇ Export</button>
-      <button class="btn btn-ghost btn-sm" id="btn-import" title="Import data from file">⬆ Import</button>
+      <button class="btn btn-ghost btn-sm" id="btn-share" title="Share trip" style="display:none">Share</button>
+      <button class="btn btn-ghost btn-sm" id="btn-export" title="Export data to file">Export</button>
+      <button class="btn btn-ghost btn-sm" id="btn-import" title="Import data from file">Import</button>
       <input type="file" id="file-input" accept=".hpd" style="display:none" />
     </div>
     <div class="nav-controls">
@@ -30,12 +30,10 @@
 </header>
 
 <div class="legend" id="legend">
-  <span class="legend-item"><span class="dot" style="background:var(--accent2)"></span> Fly out</span>
-  <span class="legend-item"><span class="dot" style="background:var(--green)"></span> Fly in</span>
-  <span class="legend-item"><span class="dot" style="background:var(--accent)"></span> Accommodation</span>
-  <span class="legend-item"><span class="dot" style="background:var(--amber)"></span> Internal transit</span>
+  <span class="legend-item"><span class="dot" style="background:var(--ocean)"></span> Stay</span>
+  <span class="legend-item"><span class="dot" style="background:var(--amber)"></span> Transport</span>
   <span class="legend-item"><span class="dot" style="background:var(--purple)"></span> Activity</span>
-  <span class="legend-item"><span class="dot" style="background:var(--muted)"></span> Booking ref</span>
+  <span class="legend-item"><span class="dot" style="background:var(--muted)"></span> Day note</span>
 </div>
 
 <!-- Trips Dashboard (shown when logged in, no trip selected) -->
@@ -47,81 +45,191 @@
   <div id="trips-list" style="display:grid;gap:10px;"></div>
 </div>
 
-<div class="calendar" id="calendar"></div>
+<div class="calendar-shell">
+  <div class="calendar" id="calendar" aria-label="Monthly itinerary"></div>
+</div>
 
-<!-- Modal -->
-<div class="modal-overlay" id="modal-overlay">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title" id="modal-date-title"></div>
-      <button class="modal-close" id="modal-close">✕</button>
+<!-- Day agenda -->
+<dialog class="dialog agenda-dialog" id="agenda-dialog" aria-labelledby="agenda-date-title">
+  <div class="dialog-header">
+    <div>
+      <div class="dialog-kicker">Day plan</div>
+      <h2 class="dialog-title" id="agenda-date-title"></h2>
+    </div>
+    <button class="icon-btn dialog-close" id="agenda-close" aria-label="Close day plan">×</button>
+  </div>
+
+  <div class="agenda-items" id="agenda-items"></div>
+
+  <div class="add-plan-group" aria-label="Add a plan">
+    <span>Add to this day</span>
+    <div class="add-plan-actions">
+      <button class="btn btn-secondary" data-add-type="stay">Stay</button>
+      <button class="btn btn-secondary" data-add-type="transport">Transport</button>
+      <button class="btn btn-secondary" data-add-type="activity">Activity</button>
+    </div>
+  </div>
+
+  <details class="legacy-notes" id="legacy-notes">
+    <summary>Day notes and older entries</summary>
+    <p class="field-help">Use this for loose notes. New bookings work best as structured plans above.</p>
+    <div class="legacy-grid">
+      <label class="check-field"><input type="checkbox" id="field-fly-out" /> Flying out</label>
+      <label class="check-field"><input type="checkbox" id="field-fly-in" /> Flying in</label>
+      <div class="field-group">
+        <label for="field-accom">Accommodation notes</label>
+        <textarea id="field-accom" rows="2"></textarea>
+      </div>
+      <div class="field-group">
+        <label for="field-transit">Transport notes</label>
+        <textarea id="field-transit" rows="2"></textarea>
+      </div>
+      <div class="field-group">
+        <label for="field-activity">Activity notes</label>
+        <textarea id="field-activity" rows="2"></textarea>
+      </div>
+      <div class="field-group">
+        <label for="field-ref">Booking references</label>
+        <textarea id="field-ref" rows="2"></textarea>
+      </div>
+      <div class="field-group">
+        <label for="field-notes">Notes</label>
+        <textarea id="field-notes" rows="2"></textarea>
+      </div>
+    </div>
+    <div class="inline-actions">
+      <button class="btn btn-danger" id="btn-clear-day">Clear day notes</button>
+      <button class="btn btn-ghost" id="btn-save-day">Save day notes</button>
+    </div>
+  </details>
+</dialog>
+
+<!-- Itinerary entry editor -->
+<dialog class="dialog entry-dialog" id="entry-dialog" aria-labelledby="entry-title">
+  <form id="entry-form" novalidate>
+    <div class="dialog-header">
+      <div>
+        <div class="dialog-kicker" id="entry-kicker">New plan</div>
+        <h2 class="dialog-title" id="entry-title">Add a stay</h2>
+      </div>
+      <button type="button" class="icon-btn dialog-close" id="entry-close" aria-label="Close entry editor">×</button>
     </div>
 
-    <div class="modal-fields-container">
-      <div class="modal-fields" id="modal-fields">
-        <div class="modal-field-wrapper" data-field="flights">
-          <span class="drag-handle">⠿</span>
-          <div class="checkbox-row">
-            <label class="checkbox-label">
-              <input type="checkbox" id="field-fly-out" />
-              <span style="color:var(--accent2)">✈️ Fly out</span>
-            </label>
-            <label class="checkbox-label">
-              <input type="checkbox" id="field-fly-in" />
-              <span style="color:var(--green)">🛬 Fly in</span>
-            </label>
-          </div>
-        </div>
+    <input type="hidden" id="entry-id" />
+    <input type="hidden" id="entry-type" />
 
-        <div class="modal-field-wrapper" data-field="accom">
-          <span class="drag-handle">⠿</span>
-          <div class="field-group">
-            <label>🏨 Accommodation <span class="field-hint">(one per line)</span></label>
-            <textarea id="field-accom" placeholder="Hotel / Airbnb / hostel name...&#10;e.g. Checking out: Hotel A&#10;Checking in: Hotel B" rows="2"></textarea>
-          </div>
-        </div>
+    <div class="entry-fields">
+      <div class="field-group full-field">
+        <label for="entry-name">Name <span aria-hidden="true">*</span></label>
+        <input id="entry-name" required maxlength="120" autocomplete="off" aria-describedby="entry-name-error" />
+        <p class="field-error" id="entry-name-error"></p>
+      </div>
 
-        <div class="modal-field-wrapper" data-field="transit">
-          <span class="drag-handle">⠿</span>
-          <div class="field-group">
-            <label>🚂 Internal transit <span class="field-hint">(one per line)</span></label>
-            <textarea id="field-transit" placeholder="Train, bus, ferry, hire car...&#10;e.g. Bus: Sapa → Hanoi&#10;Flight: Hanoi → HCMC" rows="2"></textarea>
-          </div>
+      <div class="type-fields" data-entry-fields="stay">
+        <div class="field-group">
+          <label for="stay-start-date">Check-in date <span aria-hidden="true">*</span></label>
+          <input type="date" id="stay-start-date" required />
         </div>
-
-        <div class="modal-field-wrapper" data-field="activity">
-          <span class="drag-handle">⠿</span>
-          <div class="field-group">
-            <label>🎯 Activities <span class="field-hint">(one per line)</span></label>
-            <textarea id="field-activity" placeholder="Tours, excursions, plans...&#10;e.g. Morning: Temple visit&#10;Afternoon: Cooking class"></textarea>
-          </div>
+        <div class="field-group">
+          <label for="stay-start-time">Check-in time</label>
+          <input type="time" id="stay-start-time" />
         </div>
-
-        <div class="modal-field-wrapper" data-field="ref">
-          <span class="drag-handle">⠿</span>
-          <div class="field-group">
-            <label>🔖 Booking references <span class="field-hint">(one per line)</span></label>
-            <textarea id="field-ref" placeholder="e.g. BA12345&#10;Booking.com: 9876543" rows="2"></textarea>
-          </div>
+        <div class="field-group">
+          <label for="stay-end-date">Check-out date <span aria-hidden="true">*</span></label>
+          <input type="date" id="stay-end-date" required />
         </div>
-
-        <div class="modal-field-wrapper" data-field="notes">
-          <span class="drag-handle">⠿</span>
-          <div class="field-group">
-            <label>📝 Notes</label>
-            <textarea id="field-notes" placeholder="Anything else..."></textarea>
-          </div>
+        <div class="field-group">
+          <label for="stay-end-time">Check-out time</label>
+          <input type="time" id="stay-end-time" />
         </div>
       </div>
+
+      <div class="type-fields" data-entry-fields="transport">
+        <div class="field-group">
+          <label for="transport-mode">Type</label>
+          <select id="transport-mode">
+            <option value="flight">Flight</option>
+            <option value="train">Train</option>
+            <option value="bus">Bus</option>
+            <option value="ferry">Ferry</option>
+            <option value="car">Car</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label for="transport-number" id="transport-number-label">Flight number</label>
+          <input id="transport-number" maxlength="60" />
+        </div>
+        <div class="field-group">
+          <label for="transport-start-date">Departure date <span aria-hidden="true">*</span></label>
+          <input type="date" id="transport-start-date" required />
+        </div>
+        <div class="field-group">
+          <label for="transport-start-time">Departure time</label>
+          <input type="time" id="transport-start-time" />
+        </div>
+        <div class="field-group">
+          <label for="transport-end-date">Arrival date</label>
+          <input type="date" id="transport-end-date" />
+        </div>
+        <div class="field-group">
+          <label for="transport-end-time">Arrival time</label>
+          <input type="time" id="transport-end-time" />
+        </div>
+        <div class="field-group">
+          <label for="transport-from" id="transport-from-label">From</label>
+          <input id="transport-from" maxlength="120" />
+        </div>
+        <div class="field-group">
+          <label for="transport-to" id="transport-to-label">To</label>
+          <input id="transport-to" maxlength="120" />
+        </div>
+        <div class="field-group transport-terminal">
+          <label for="transport-start-terminal">Departure terminal</label>
+          <input id="transport-start-terminal" maxlength="60" />
+        </div>
+        <div class="field-group transport-terminal">
+          <label for="transport-end-terminal">Arrival terminal</label>
+          <input id="transport-end-terminal" maxlength="60" />
+        </div>
+      </div>
+
+      <div class="type-fields" data-entry-fields="activity">
+        <div class="field-group">
+          <label for="activity-date">Date <span aria-hidden="true">*</span></label>
+          <input type="date" id="activity-date" required />
+        </div>
+        <div class="field-group">
+          <label for="activity-start-time">Start time</label>
+          <input type="time" id="activity-start-time" />
+        </div>
+        <div class="field-group">
+          <label for="activity-end-time">End time</label>
+          <input type="time" id="activity-end-time" />
+        </div>
+      </div>
+
+      <div class="field-group full-field">
+        <label for="entry-address" id="entry-address-label">Address</label>
+        <input id="entry-address" maxlength="240" autocomplete="street-address" />
+      </div>
+      <div class="field-group">
+        <label for="entry-booking-ref">Booking reference</label>
+        <input id="entry-booking-ref" maxlength="100" />
+      </div>
+      <div class="field-group full-field">
+        <label for="entry-notes">Notes</label>
+        <textarea id="entry-notes" rows="3" maxlength="1000"></textarea>
+      </div>
+      <p class="form-error full-field" id="entry-form-error" role="alert"></p>
     </div>
 
     <div class="modal-actions">
-      <button class="btn btn-danger" id="btn-clear">Clear day</button>
-      <button class="btn btn-ghost" id="btn-cancel">Cancel</button>
-      <button class="btn btn-primary" id="btn-save">Save</button>
+      <button type="button" class="btn btn-danger" id="btn-delete-entry">Delete plan</button>
+      <button type="button" class="btn btn-ghost" id="btn-cancel-entry">Close without saving</button>
+      <button type="submit" class="btn btn-primary" id="btn-save-entry">Save plan</button>
     </div>
-  </div>
-</div>
+  </form>
+</dialog>
 
 <!-- Share Modal -->
 <div class="modal-overlay" id="share-overlay">
