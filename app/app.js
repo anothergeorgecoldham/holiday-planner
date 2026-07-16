@@ -728,13 +728,22 @@ function createStayTag(item, dateKey, monthStart, monthEnd) {
   ].filter(Boolean).join(' ');
 
   if (isCheckIn || isCheckOut) {
-    const state = document.createElement('span');
-    state.className = 'stay-state';
-    state.textContent = isCheckIn && isCheckOut ? 'In/out' : isCheckIn ? 'Check in' : 'Check out';
+    if (isCheckIn) {
+      const checkIn = document.createElement('span');
+      checkIn.className = 'stay-state stay-state-start';
+      checkIn.textContent = 'Check in';
+      button.appendChild(checkIn);
+    }
     const name = document.createElement('span');
     name.className = 'stay-name';
     name.textContent = item.name;
-    button.append(state, name);
+    button.appendChild(name);
+    if (isCheckOut) {
+      const checkOut = document.createElement('span');
+      checkOut.className = 'stay-state stay-state-end';
+      checkOut.textContent = 'Check out';
+      button.appendChild(checkOut);
+    }
   } else if (startsRow) {
     const name = document.createElement('span');
     name.className = 'stay-name';
