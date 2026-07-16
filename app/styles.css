@@ -317,6 +317,10 @@ button.tag:focus-visible {
   line-height: 1.35;
 }
 
+.stay-state-end {
+  margin-left: auto;
+}
+
 .stay-name {
   min-width: 0;
   overflow: hidden;
