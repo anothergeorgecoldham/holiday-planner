@@ -139,6 +139,7 @@ async function loadData() {
     }
   }
 
+  showFirstPlanMonth();
   render();
 }
 
@@ -225,7 +226,55 @@ document.getElementById('btn-next').addEventListener('click', () => {
 });
 
 function syncYearSelect() {
+  ensureYearOption(viewYear);
   yearSel.value = viewYear;
+}
+
+function ensureYearOption(year) {
+  if ([...yearSel.options].some(option => Number(option.value) === year)) return;
+  const option = document.createElement('option');
+  option.value = year;
+  option.textContent = year;
+  yearSel.appendChild(option);
+  [...yearSel.options]
+    .sort((a, b) => Number(a.value) - Number(b.value))
+    .forEach(existing => yearSel.appendChild(existing));
+}
+
+function isValidDateKey(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+}
+
+function hasLegacyDayContent(entry) {
+  return !!(entry && typeof entry === 'object' && (
+    entry.flyOut || entry.flyIn || entry.accom || entry.transit ||
+    entry.activity || entry.ref || entry.notes
+  ));
+}
+
+function getFirstPlanDate() {
+  const dates = Object.entries(data)
+    .filter(([dateKey, entry]) => isValidDateKey(dateKey) && hasLegacyDayContent(entry))
+    .map(([dateKey]) => dateKey);
+
+  getItinerary().forEach(item => {
+    const dateKey = item.type === 'activity' ? item.date : item.startDate;
+    if (isValidDateKey(dateKey)) dates.push(dateKey);
+  });
+
+  return dates.sort()[0] || null;
+}
+
+function showFirstPlanMonth() {
+  const firstDate = getFirstPlanDate();
+  if (!firstDate) return;
+  const [year, month] = firstDate.split('-').map(Number);
+  viewYear = year;
+  viewMonth = month - 1;
+  syncYearSelect();
 }
 
 /* ── Itinerary data and editors ── */
@@ -769,6 +818,7 @@ function importData(file) {
       }
       const saved = await save();
       if (!saved) return;
+      showFirstPlanMonth();
       render();
     } catch (err) {
       alert('Import failed: ' + err.message);
