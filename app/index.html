@@ -15,6 +15,7 @@
     <div id="sync-status" class="sync-status"></div>
     <div id="auth-controls" class="auth-controls"></div>
     <div class="io-controls">
+      <button class="btn btn-ghost btn-sm" id="btn-settings" title="Holiday settings" style="display:none">Settings</button>
       <button class="btn btn-ghost btn-sm" id="btn-share" title="Share trip" style="display:none">Share</button>
       <button class="btn btn-ghost btn-sm" id="btn-export" title="Export data to file">Export</button>
       <button class="btn btn-ghost btn-sm" id="btn-import" title="Import data from file">Import</button>
@@ -45,8 +46,44 @@
   <div id="trips-list" style="display:grid;gap:10px;"></div>
 </div>
 
-<div class="calendar-shell">
-  <div class="calendar" id="calendar" aria-label="Monthly itinerary"></div>
+<div class="planner-workspace" id="planner-workspace">
+  <div class="calendar-shell">
+    <div class="calendar" id="calendar" aria-label="Monthly itinerary"></div>
+  </div>
+
+  <aside class="converter-panel" id="currency-converter" aria-labelledby="converter-title">
+    <div class="converter-heading">
+      <div>
+        <h2 id="converter-title">Currency converter</h2>
+        <p id="converter-pair">Set your countries to get started</p>
+      </div>
+      <button class="icon-btn converter-swap" id="converter-swap" type="button" aria-label="Reverse conversion" title="Reverse conversion" disabled>⇄</button>
+    </div>
+
+    <div class="converter-empty" id="converter-empty">
+      Add your destination and home country to quickly check prices while planning.
+      <button class="btn btn-secondary" id="converter-open-settings" type="button">Open settings</button>
+    </div>
+
+    <div class="converter-controls" id="converter-controls" hidden>
+      <label class="converter-amount-label" for="converter-amount">
+        <span>Amount</span>
+        <span id="converter-source-code"></span>
+      </label>
+      <input class="converter-amount" id="converter-amount" type="number" min="0" inputmode="decimal" />
+      <input class="converter-range" id="converter-range" type="range" min="0" value="0" aria-label="Amount to convert" />
+      <div class="converter-range-labels">
+        <span>0</span>
+        <span id="converter-range-max"></span>
+      </div>
+      <div class="converter-result" aria-live="polite">
+        <span>About</span>
+        <strong id="converter-result-value">—</strong>
+        <span id="converter-target-code"></span>
+      </div>
+      <p class="converter-rate" id="converter-rate">Loading the latest rate…</p>
+    </div>
+  </aside>
 </div>
 
 <!-- Day agenda -->
@@ -227,6 +264,49 @@
       <button type="button" class="btn btn-danger" id="btn-delete-entry">Delete plan</button>
       <button type="button" class="btn btn-ghost" id="btn-cancel-entry">Close without saving</button>
       <button type="submit" class="btn btn-primary" id="btn-save-entry">Save plan</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Holiday settings -->
+<dialog class="dialog settings-dialog" id="settings-dialog" aria-labelledby="settings-title">
+  <form id="settings-form" novalidate>
+    <div class="dialog-header">
+      <div>
+        <div class="dialog-kicker">Trip details</div>
+        <h2 class="dialog-title" id="settings-title">Holiday settings</h2>
+      </div>
+      <button type="button" class="icon-btn dialog-close" id="settings-close" aria-label="Close holiday settings">×</button>
+    </div>
+
+    <p class="field-help settings-help">These dates choose the month shown when the trip opens. Countries set the default currency conversion.</p>
+    <div class="settings-fields">
+      <div class="field-group">
+        <label for="holiday-start-date">Start date <span aria-hidden="true">*</span></label>
+        <input type="date" id="holiday-start-date" required />
+      </div>
+      <div class="field-group">
+        <label for="holiday-end-date">End date <span aria-hidden="true">*</span></label>
+        <input type="date" id="holiday-end-date" required />
+      </div>
+      <div class="field-group">
+        <label for="holiday-country">Holiday country <span aria-hidden="true">*</span></label>
+        <select id="holiday-country" required>
+          <option value="">Choose a country</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label for="home-country">Home country <span aria-hidden="true">*</span></label>
+        <select id="home-country" required>
+          <option value="">Choose a country</option>
+        </select>
+      </div>
+      <p class="form-error full-field" id="settings-form-error" role="alert"></p>
+    </div>
+
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" id="settings-cancel">Cancel</button>
+      <button type="submit" class="btn btn-primary" id="settings-save">Save settings</button>
     </div>
   </form>
 </dialog>
