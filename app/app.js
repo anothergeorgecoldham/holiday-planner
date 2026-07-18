@@ -6,11 +6,44 @@ const DAYS   = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 
 const storageKey = 'holiday-planner-v1';
 const tripId = new URLSearchParams(location.search).get('trip');
+const SETTINGS_KEY = '_settings';
+const RATE_CACHE_PREFIX = 'holiday-planner-rate-';
+
+const COUNTRIES = [
+  ['AR', 'Argentina', 'ARS'], ['AU', 'Australia', 'AUD'], ['AT', 'Austria', 'EUR'],
+  ['BE', 'Belgium', 'EUR'], ['BR', 'Brazil', 'BRL'], ['BG', 'Bulgaria', 'BGN'],
+  ['KH', 'Cambodia', 'KHR'], ['CA', 'Canada', 'CAD'], ['CL', 'Chile', 'CLP'],
+  ['CN', 'China', 'CNY'], ['CO', 'Colombia', 'COP'], ['HR', 'Croatia', 'EUR'],
+  ['CY', 'Cyprus', 'EUR'], ['CZ', 'Czechia', 'CZK'], ['DK', 'Denmark', 'DKK'],
+  ['EG', 'Egypt', 'EGP'], ['EE', 'Estonia', 'EUR'], ['FJ', 'Fiji', 'FJD'],
+  ['FI', 'Finland', 'EUR'], ['FR', 'France', 'EUR'], ['DE', 'Germany', 'EUR'],
+  ['GR', 'Greece', 'EUR'], ['HK', 'Hong Kong', 'HKD'], ['HU', 'Hungary', 'HUF'],
+  ['IS', 'Iceland', 'ISK'], ['IN', 'India', 'INR'], ['ID', 'Indonesia', 'IDR'],
+  ['IE', 'Ireland', 'EUR'], ['IL', 'Israel', 'ILS'], ['IT', 'Italy', 'EUR'],
+  ['JP', 'Japan', 'JPY'], ['JO', 'Jordan', 'JOD'], ['KE', 'Kenya', 'KES'],
+  ['LA', 'Laos', 'LAK'], ['LV', 'Latvia', 'EUR'], ['LT', 'Lithuania', 'EUR'],
+  ['LU', 'Luxembourg', 'EUR'], ['MY', 'Malaysia', 'MYR'], ['MV', 'Maldives', 'MVR'],
+  ['MT', 'Malta', 'EUR'], ['MX', 'Mexico', 'MXN'], ['MA', 'Morocco', 'MAD'],
+  ['NP', 'Nepal', 'NPR'], ['NL', 'Netherlands', 'EUR'], ['NZ', 'New Zealand', 'NZD'],
+  ['NO', 'Norway', 'NOK'], ['PE', 'Peru', 'PEN'], ['PH', 'Philippines', 'PHP'],
+  ['PL', 'Poland', 'PLN'], ['PT', 'Portugal', 'EUR'], ['QA', 'Qatar', 'QAR'],
+  ['RO', 'Romania', 'RON'], ['SG', 'Singapore', 'SGD'], ['SK', 'Slovakia', 'EUR'],
+  ['SI', 'Slovenia', 'EUR'], ['ZA', 'South Africa', 'ZAR'], ['KR', 'South Korea', 'KRW'],
+  ['ES', 'Spain', 'EUR'], ['LK', 'Sri Lanka', 'LKR'], ['SE', 'Sweden', 'SEK'],
+  ['CH', 'Switzerland', 'CHF'], ['TW', 'Taiwan', 'TWD'], ['TZ', 'Tanzania', 'TZS'],
+  ['TH', 'Thailand', 'THB'], ['TR', 'Türkiye', 'TRY'], ['AE', 'United Arab Emirates', 'AED'],
+  ['GB', 'United Kingdom', 'GBP'], ['US', 'United States', 'USD'], ['VU', 'Vanuatu', 'VUV'],
+  ['VN', 'Vietnam', 'VND']
+].map(([code, name, currency]) => ({ code, name, currency }));
 
 let data = {};
 let cloudEtag = null; // optimistic concurrency token
 let currentUser = null;
 let currentTripName = null;
+let converterReversed = false;
+let converterRate = null;
+let converterRateDate = null;
+let converterRequestId = 0;
 
 /* ── Toast notifications ── */
 function showToast(message, type = 'info', duration = 4000) {
@@ -81,6 +114,17 @@ function renderCurrentTrip() {
   id.className = 'trip-id';
   id.textContent = tripId;
 
+  const settings = getSettings();
+  const destination = getCountry(settings.destinationCountry);
+  const context = document.createElement('span');
+  context.className = 'trip-context';
+  context.textContent = [
+    destination?.name,
+    isValidDateKey(settings.startDate) && isValidDateKey(settings.endDate)
+      ? formatDateRange(settings.startDate, settings.endDate)
+      : ''
+  ].filter(Boolean).join(' · ');
+
   const back = document.createElement('button');
   back.className = 'btn btn-ghost btn-sm';
   back.type = 'button';
@@ -89,7 +133,9 @@ function renderCurrentTrip() {
     window.location.href = window.location.pathname;
   });
 
-  el.append('🧳 ', name, id, back);
+  el.append('🧳 ', name);
+  if (context.textContent) el.append(context);
+  el.append(id, back);
 }
 
 /* ── Data loading ── */
@@ -139,8 +185,10 @@ async function loadData() {
     }
   }
 
-  showFirstPlanMonth();
+  showTripStartMonth();
   render();
+  renderCurrentTrip();
+  renderCurrencyConverter();
 }
 
 /* ── Data saving ── */
@@ -248,6 +296,22 @@ function isValidDateKey(value) {
   return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
 }
 
+function getSettings() {
+  const settings = data[SETTINGS_KEY];
+  return settings && typeof settings === 'object' && !Array.isArray(settings) ? settings : {};
+}
+
+function getCountry(code) {
+  return COUNTRIES.find(country => country.code === code) || null;
+}
+
+function formatDateRange(startDate, endDate) {
+  const start = parseDateKey(startDate);
+  const end = parseDateKey(endDate);
+  const sameYear = start.getFullYear() === end.getFullYear();
+  return `${start.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: sameYear ? undefined : 'numeric' })}–${end.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`;
+}
+
 function hasLegacyDayContent(entry) {
   return !!(entry && typeof entry === 'object' && (
     entry.flyOut || entry.flyIn || entry.accom || entry.transit ||
@@ -268,13 +332,243 @@ function getFirstPlanDate() {
   return dates.sort()[0] || null;
 }
 
-function showFirstPlanMonth() {
-  const firstDate = getFirstPlanDate();
+function showTripStartMonth() {
+  const settings = getSettings();
+  const firstDate = isValidDateKey(settings.startDate) ? settings.startDate : getFirstPlanDate();
   if (!firstDate) return;
   const [year, month] = firstDate.split('-').map(Number);
   viewYear = year;
   viewMonth = month - 1;
   syncYearSelect();
+}
+
+/* ── Holiday settings and currency conversion ── */
+const settingsDialog = document.getElementById('settings-dialog');
+const settingsForm = document.getElementById('settings-form');
+const destinationSelect = document.getElementById('holiday-country');
+const homeSelect = document.getElementById('home-country');
+const converterAmount = document.getElementById('converter-amount');
+const converterRange = document.getElementById('converter-range');
+
+function populateCountrySelect(select) {
+  COUNTRIES.forEach(country => {
+    const option = document.createElement('option');
+    option.value = country.code;
+    option.textContent = `${country.name} (${country.currency})`;
+    select.appendChild(option);
+  });
+}
+
+populateCountrySelect(destinationSelect);
+populateCountrySelect(homeSelect);
+
+function openSettings() {
+  const settings = getSettings();
+  document.getElementById('holiday-start-date').value = settings.startDate || '';
+  document.getElementById('holiday-end-date').value = settings.endDate || '';
+  destinationSelect.value = settings.destinationCountry || '';
+  homeSelect.value = settings.homeCountry || '';
+  document.getElementById('settings-form-error').textContent = '';
+  settingsDialog.showModal();
+}
+
+document.getElementById('btn-settings').addEventListener('click', openSettings);
+document.getElementById('converter-open-settings').addEventListener('click', openSettings);
+document.getElementById('settings-close').addEventListener('click', () => settingsDialog.close());
+document.getElementById('settings-cancel').addEventListener('click', () => settingsDialog.close());
+
+settingsForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  const startDate = document.getElementById('holiday-start-date').value;
+  const endDate = document.getElementById('holiday-end-date').value;
+  const destinationCountry = destinationSelect.value;
+  const homeCountry = homeSelect.value;
+  const error = document.getElementById('settings-form-error');
+  error.textContent = '';
+
+  if (!startDate || !endDate || !destinationCountry || !homeCountry) {
+    error.textContent = 'Add both dates and choose a holiday and home country.';
+    return;
+  }
+  if (endDate < startDate) {
+    error.textContent = 'The end date cannot be before the start date.';
+    return;
+  }
+
+  data[SETTINGS_KEY] = { startDate, endDate, destinationCountry, homeCountry };
+  const saveButton = document.getElementById('settings-save');
+  saveButton.disabled = true;
+  saveButton.textContent = 'Saving…';
+  const saved = await save();
+  saveButton.disabled = false;
+  saveButton.textContent = 'Save settings';
+  if (!saved) return;
+
+  converterReversed = false;
+  showTripStartMonth();
+  render();
+  renderCurrentTrip();
+  renderCurrencyConverter();
+  settingsDialog.close();
+  showToast('Holiday settings saved.', 'info', 2200);
+});
+
+function getConverterPair() {
+  const settings = getSettings();
+  const destination = getCountry(settings.destinationCountry);
+  const home = getCountry(settings.homeCountry);
+  if (!destination || !home) return null;
+  return converterReversed
+    ? { source: home, target: destination }
+    : { source: destination, target: home };
+}
+
+function getSliderConfig(currency) {
+  const configs = {
+    VND: [10000000, 100000, 1000000],
+    IDR: [10000000, 100000, 1000000],
+    KRW: [2000000, 10000, 100000],
+    JPY: [200000, 1000, 10000],
+    HUF: [500000, 5000, 50000],
+    CLP: [2000000, 10000, 100000],
+    COP: [10000000, 100000, 1000000],
+    KHR: [10000000, 100000, 1000000],
+    LAK: [10000000, 100000, 1000000]
+  };
+  const [max, step, initial] = configs[currency] || [5000, 10, 100];
+  return { max, step, initial };
+}
+
+function formatPlainAmount(value, currency) {
+  return new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: ['VND', 'IDR', 'JPY', 'KRW', 'CLP', 'HUF'].includes(currency) ? 0 : 2
+  }).format(value);
+}
+
+function updateConversionResult() {
+  const pair = getConverterPair();
+  const amount = Number(converterAmount.value);
+  const result = document.getElementById('converter-result-value');
+  if (!pair || !Number.isFinite(amount) || amount < 0 || !converterRate) {
+    result.textContent = '—';
+    return;
+  }
+  result.textContent = new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: pair.target.currency,
+    maximumFractionDigits: pair.target.currency === 'VND' ? 0 : 2
+  }).format(amount * converterRate);
+}
+
+function syncConverterAmount(value, source) {
+  const numericValue = Math.max(0, Number(value) || 0);
+  if (source !== 'number') converterAmount.value = numericValue;
+  if (source !== 'range') converterRange.value = Math.min(numericValue, Number(converterRange.max));
+  updateConversionResult();
+}
+
+converterAmount.addEventListener('input', event => syncConverterAmount(event.target.value, 'number'));
+converterRange.addEventListener('input', event => syncConverterAmount(event.target.value, 'range'));
+
+document.getElementById('converter-swap').addEventListener('click', () => {
+  converterReversed = !converterReversed;
+  renderCurrencyConverter();
+});
+
+async function loadCurrencyRate(sourceCurrency, targetCurrency) {
+  const requestId = ++converterRequestId;
+  const cacheKey = `${RATE_CACHE_PREFIX}${sourceCurrency.toLowerCase()}`;
+  let cached = null;
+  try {
+    cached = JSON.parse(localStorage.getItem(cacheKey));
+  } catch (error) {
+    console.warn('Currency cache could not be read.', error);
+  }
+
+  const isFresh = cached?.savedAt && Date.now() - cached.savedAt < 12 * 60 * 60 * 1000;
+  let rates = isFresh ? cached : null;
+  let isStale = false;
+
+  if (!rates) {
+    try {
+      const response = await fetch(`https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/${sourceCurrency.toLowerCase()}.json`);
+      if (!response.ok) throw new Error(`Rate service returned ${response.status}`);
+      const payload = await response.json();
+      rates = {
+        date: payload.date,
+        values: payload[sourceCurrency.toLowerCase()],
+        savedAt: Date.now()
+      };
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify(rates));
+      } catch (error) {
+        console.warn('Currency rate could not be cached.', error);
+      }
+    } catch (error) {
+      console.warn('Currency rate load failed.', error);
+      if (cached?.values) {
+        rates = cached;
+        isStale = true;
+      } else {
+        if (requestId !== converterRequestId) return;
+        converterRate = null;
+        document.getElementById('converter-rate').textContent = 'Rate unavailable. Check your connection and try again.';
+        updateConversionResult();
+        return;
+      }
+    }
+  }
+
+  if (requestId !== converterRequestId) return;
+  const rate = Number(rates.values?.[targetCurrency.toLowerCase()]);
+  converterRate = Number.isFinite(rate) ? rate : null;
+  converterRateDate = rates.date || null;
+  document.getElementById('converter-rate').textContent = converterRate
+    ? `${isStale ? 'Cached' : 'Daily'} rate${converterRateDate ? ` · ${formatDateKey(converterRateDate)}` : ''}`
+    : `No ${sourceCurrency} to ${targetCurrency} rate is available.`;
+  updateConversionResult();
+}
+
+function renderCurrencyConverter() {
+  const pair = getConverterPair();
+  const empty = document.getElementById('converter-empty');
+  const controls = document.getElementById('converter-controls');
+  const swap = document.getElementById('converter-swap');
+  converterRate = null;
+  converterRateDate = null;
+
+  if (!pair) {
+    empty.hidden = false;
+    controls.hidden = true;
+    swap.disabled = true;
+    document.getElementById('converter-pair').textContent = 'Set your countries to get started';
+    return;
+  }
+
+  empty.hidden = true;
+  controls.hidden = false;
+  swap.disabled = pair.source.currency === pair.target.currency;
+  document.getElementById('converter-pair').textContent = `${pair.source.name} to ${pair.target.name}`;
+  document.getElementById('converter-source-code').textContent = pair.source.currency;
+  document.getElementById('converter-target-code').textContent = pair.target.currency;
+  document.getElementById('converter-rate').textContent = pair.source.currency === pair.target.currency
+    ? 'Both countries use the same currency.'
+    : 'Loading the latest rate…';
+
+  const config = getSliderConfig(pair.source.currency);
+  converterRange.max = config.max;
+  converterRange.step = config.step;
+  converterAmount.step = config.step;
+  document.getElementById('converter-range-max').textContent =
+    `${formatPlainAmount(config.max, pair.source.currency)} ${pair.source.currency}`;
+  syncConverterAmount(config.initial);
+
+  if (pair.source.currency === pair.target.currency) {
+    converterRate = 1;
+    updateConversionResult();
+    return;
+  }
+  loadCurrencyRate(pair.source.currency, pair.target.currency);
 }
 
 /* ── Itinerary data and editors ── */
@@ -811,6 +1105,7 @@ function createItineraryTag(item, dateKey) {
 function render() {
   document.getElementById('month-label').textContent =
     `${MONTHS[viewMonth]} ${viewYear}`;
+  const settings = getSettings();
 
   const cal = document.getElementById('calendar');
   cal.innerHTML = '';
@@ -845,6 +1140,10 @@ function render() {
 
     const isToday = (d === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear());
     if (isToday) cell.classList.add('today');
+    if (isValidDateKey(settings.startDate) && isValidDateKey(settings.endDate)) {
+      if (dateKey >= settings.startDate && dateKey <= settings.endDate) cell.classList.add('holiday-date');
+      else cell.classList.add('outside-holiday');
+    }
     const num = document.createElement('button');
     num.type = 'button';
     num.className = 'day-num';
@@ -904,7 +1203,9 @@ function importData(file) {
       if (typeof decoded !== 'object' || decoded === null || Array.isArray(decoded)) throw new Error('Invalid data.');
       const existing = Object.keys(data).length;
       if (existing > 0) {
-        const importedDays = Object.keys(decoded).filter(key => key !== ITINERARY_KEY).length;
+        const importedDays = Object.keys(decoded)
+          .filter(key => key !== ITINERARY_KEY && key !== SETTINGS_KEY && isValidDateKey(key))
+          .length;
         const importedPlans = Array.isArray(decoded[ITINERARY_KEY]) ? decoded[ITINERARY_KEY].length : 0;
         const merge = confirm(
           `Import contains ${importedDays} day(s) and ${importedPlans} structured plan(s).\n\n` +
@@ -928,8 +1229,10 @@ function importData(file) {
       }
       const saved = await save();
       if (!saved) return;
-      showFirstPlanMonth();
+      showTripStartMonth();
       render();
+      renderCurrentTrip();
+      renderCurrencyConverter();
     } catch (err) {
       alert('Import failed: ' + err.message);
     }
@@ -1060,7 +1363,7 @@ shareUsername.addEventListener('keydown', (e) => {
 /* ── Trips Dashboard ── */
 async function showDashboard() {
   const dashboard = document.getElementById('trips-dashboard');
-  const calendar = document.getElementById('calendar');
+  const workspace = document.getElementById('planner-workspace');
   const legend = document.getElementById('legend');
 
   // Only show dashboard if no trip selected
@@ -1070,7 +1373,7 @@ async function showDashboard() {
   }
 
   dashboard.style.display = '';
-  calendar.style.display = 'none';
+  workspace.style.display = 'none';
   legend.style.display = 'none';
 
   const tripsList = document.getElementById('trips-list');
@@ -1136,6 +1439,7 @@ document.getElementById('btn-new-trip').addEventListener('click', async () => {
   if (!tripId) {
     await showDashboard();
   } else {
+    document.getElementById('btn-settings').style.display = '';
     await loadData();
   }
 })();
